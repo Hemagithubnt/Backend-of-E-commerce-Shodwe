@@ -1,0 +1,613 @@
+import UserModel from "../models/user.model.js";
+import bcryptjs from "bcryptjs";
+import jwt from "jsonwebtoken";
+import sendEmailFun from "../config/sendEmail.js";
+import VerificationEmail from "../utils/verifyEmailTemplate.js";
+import generatedAccessToken from "../utils/generatedAccessToken.js";
+import generatedRefreshToken from "../utils/generatedRefreshToken.js";
+import { v2 as cloudinary } from "cloudinary";
+import fs from "fs";
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+  secure: true,
+});
+//register controller
+export async function registerUserController(request, response) {
+  try {
+    let user;
+    const { name, email, password } = request.body;
+    if (!name || !email || !password) {
+      return response.status(400).json({
+        message: "provide email, name, password",
+        error: true,
+        success: false,
+      });
+    }
+
+    user = await UserModel.findOne({ email: email });
+
+    if (user) {
+      return response.json({
+        message: "User already Registered with this email",
+        error: true,
+        success: false,
+      });
+    }
+    const verifyCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const salt = await bcryptjs.genSalt(10);
+    const hashPassword = await bcryptjs.hash(password, salt);
+
+    const payload = {
+      name: name,
+      email: email,
+      password: hashPassword,
+      otp: verifyCode,
+      otpExpires: Date.now() + 600000, // 10 minutes
+    };
+    user = new UserModel(payload);
+    await user.save();
+
+    //Send verification email
+    await sendEmailFun({
+      sendTo: email,
+      subject: "Verify email from Ecommerce App",
+      text: "",
+      html: VerificationEmail(name, verifyCode),
+    });
+
+    //Create a JWT token for verification purposes
+    const token = jwt.sign(
+      { email: user.email, id: user._id },
+      process.env.JSON_WEB_TOKEN_SECRET_KEY
+    );
+
+    return response.status(200).json({
+      success: true,
+      error: false,
+      message: "User registered successfully! Please verify your email.",
+      token: token, // Optional: include this if needed for verification
+    });
+  } catch (error) {
+    return response.status(500).json({
+      message: error.message || error,
+      error: true,
+      success: false,
+    });
+  }
+}
+//verifyEmail controller
+export async function verifyEmailController(request, response) {
+  try {
+    const { email, otp } = request.body;
+
+    const user = await UserModel.findOne({ email: email });
+    if (!user) {
+      return response.status(400).json({
+        message: "User not found",
+        error: true,
+        success: false,
+      });
+    }
+    const isCodeValid = user.otp === otp;
+    const isNotExpired = user.otpExpires > Date.now();
+
+    if (isCodeValid && isNotExpired) {
+      user.verify_email = true;
+      //   user.otp = null;
+      //   user.otpExpires = null;
+      await user.save();
+      return response.status(200).json({
+        success: true,
+        error: false,
+        message: "Email verified successfully",
+      });
+    } else if (!isCodeValid) {
+      return response.status(400).json({
+        success: true,
+        error: false,
+        message: "Invalid OTP",
+      });
+    } else {
+      return response.status(400).json({
+        success: true,
+        error: false,
+        message: "OTP expired",
+      });
+    }
+  } catch (error) {
+    return response.status(500).json({
+      message: error.message || error,
+      error: true,
+      success: false,
+    });
+  }
+}
+
+//Login controller
+export async function loginUserController(request, response) {
+  try {
+    const { email, password } = request.body;
+
+    const user = await UserModel.findOne({ email: email });
+    if (!user) {
+      return response.status(400).json({
+        message: "User not register",
+        error: true,
+        success: false,
+      });
+    }
+
+    if (user.status !== "Active") {
+      return response.status(400).json({
+        message: "Contact to Admin",
+        error: true,
+        success: false,
+      });
+    }
+
+    if (user.verify_email !== true) {
+      return response.status(400).json({
+        message: "Your Email is not verify yet please verify your email first",
+        error: true,
+        success: false,
+      });
+    }
+
+    const checkPassword = await bcryptjs.compare(password, user.password);
+
+    if (!checkPassword) {
+      return response.status(400).json({
+        message: "Check your password",
+        error: true,
+        success: false,
+      });
+    }
+
+    const accessToken = await generatedAccessToken(user._id);
+    const refreshToken = await generatedRefreshToken(user._id);
+
+    const updateUser = await UserModel.findByIdAndUpdate(user?._id, {
+      last_login_date: new Date(),
+    });
+
+    const cookiesOption = {
+      httpOnly: true,
+      secure: true,
+      sameSite: "None",
+    };
+    response.cookie("accessToken", accessToken, cookiesOption);
+    response.cookie("refreshToken", refreshToken, cookiesOption);
+
+    return response.json({
+      message: "Login successfully",
+      error: false,
+      success: true,
+      data: {
+        accessToken,
+        refreshToken,
+      },
+    });
+  } catch (error) {
+    return response.status(500).json({
+      message: error.message || error,
+      error: true,
+      success: false,
+    });
+  }
+}
+
+/// Logout controller
+export async function logoutController(request, response) {
+  try {
+    const userid = request.userId; // middleware
+
+    const cookiesOption = {
+      httpOnly: true,
+      secure: true,
+      sameSite: "None",
+    };
+
+    // Remove the undefined variables - just clear cookies by name
+    response.clearCookie("accessToken", cookiesOption);
+    response.clearCookie("refreshToken", cookiesOption);
+
+    const removeRefreshToken = await UserModel.findByIdAndUpdate(userid, {
+      refresh_token: "",
+    });
+
+    return response.json({
+      message: "Logout successfully",
+      error: false,
+      success: true,
+    });
+  } catch (error) {
+    return response.status(500).json({
+      message: error.message || error,
+      error: true,
+      success: false,
+    });
+  }
+}
+
+// image upload
+var imagesArr = [];
+export async function userAvatarController(request, response) {
+  try {
+    imagesArr = [];
+    const userId = request.userId; // from auth middleware
+    const files = request.files; // multer -> array('avatar')
+
+    const user = await UserModel.findOne({ _id: userId });
+    if (!user) {
+      return response.status(500).json({
+        message: "User not found",
+        error: true,
+        success: false,
+      });
+    }
+
+    //first remove image from cloudinary
+    const imgUrl = user.avatar;
+    const urlArr = imgUrl.split("/");
+    const image = urlArr[urlArr.length - 1];
+
+    const imageName = image.split(".")[0];
+
+    if (imageName) {
+      const res = await cloudinary.uploader.destroy(
+        imageName,
+        (error, result) => {
+          // console.log(error,res)
+        }
+      );
+    }
+
+    if (!files || files.length === 0) {
+      return response.status(400).json({
+        message: "No file uploaded",
+        error: true,
+        success: false,
+      });
+    }
+
+    const options = {
+      use_filename: true,
+      unique_filename: false,
+      overwrite: false,
+    };
+
+    for (let i = 0; i < files.length; i++) {
+      // ✅ Pure await style (no callback)
+      const result = await cloudinary.uploader.upload(files[i].path, options);
+
+      // Push uploaded image URL
+      imagesArr.push(result.secure_url);
+
+      // Remove local file after upload
+      fs.unlinkSync(files[i].path);
+    }
+
+    // Update user’s avatar in DB (first image only)
+    await UserModel.findByIdAndUpdate(userId, { avatar: imagesArr[0] });
+
+    return response.status(200).json({
+      _id: userId,
+      avatar: imagesArr[0],
+      uploaded: imagesArr, // return all uploaded URLs if multiple
+    });
+  } catch (error) {
+    return response.status(500).json({
+      message: error.message || "Error uploading avatar",
+      error: true,
+      success: false,
+    });
+  }
+}
+
+//remove image from cloudinary for any user
+export async function removeImageFromCloudinary(request, response) {
+  const imgUrl = request.query.img;
+  const urlArr = imgUrl.split("/");
+  const image = urlArr[urlArr.length - 1];
+
+  const imageName = image.split(".")[0];
+
+  if (imageName) {
+    const res = await cloudinary.uploader.destroy(
+      imageName,
+      (error, result) => {
+        // console.log(error,res)
+      }
+    );
+    if (res) {
+      response.status(200).send(res);
+    }
+  }
+}
+//Update user details
+export async function updateUserDetails(request, response) {
+  try {
+    const userId = request.userId; //auth middleware
+    const { name, email, mobile, password } = request.body;
+
+    const userExist = await UserModel.findById(userId);
+    if (!userExist) {
+      return response.status(400).send("the user cannot be updated!");
+    }
+
+    let verifyCode = "";
+
+    if (email !== userExist.email) {
+      verifyCode = Math.floor(100000 + Math.random() * 900000).toString();
+    }
+
+    let hashPassword = "";
+    if (password) {
+      const salt = await bcryptjs.genSalt(10);
+      hashPassword = await bcryptjs.hash(password, salt);
+    } else {
+      hashPassword = userExist.password;
+    }
+
+    const updateUser = await UserModel.findByIdAndUpdate(
+      userId,
+      {
+        name: name,
+        mobile: mobile,
+        email: email,
+        verify_email: email !== userExist.email ? false : true,
+        password: hashPassword,
+        otp: verifyCode !== "" ? verifyCode : null,
+        otpExpires: verifyCode !== "" ? Date.now() + 600000 : "",
+      },
+      { new: true }
+    );
+
+    if (email !== userExist.email) {
+      // Send verification email
+      await sendEmailFun({
+        sendTo: email,
+        subject: "Verify email from Ecommerce App",
+        text: "",
+        html: VerificationEmail(name, verifyCode),
+      });
+    }
+    return response.status(200).json({
+      message: "User Updated successfully",
+      error: false,
+      success: true,
+      user: updateUser,
+    });
+  } catch (error) {
+    return response.status(500).json({
+      message: error.message || "Error uploading avatar",
+      error: true,
+      success: false,
+    });
+  }
+}
+
+//forgot password
+export async function forgotPasswordController(request, response) {
+  try {
+    const { email } = request.body;
+    const user = await UserModel.findOne({ email: email });
+
+    if (!user) {
+      return response.status(400).json({
+        message: "Email not available",
+        error: true,
+        success: false,
+      });
+    } else {
+      let verifyCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+      user.otp = verifyCode;
+      (user.otpExpires = Date.now() + 600000), await user.save();
+
+      await sendEmailFun({
+        sendTo: email,
+        subject: "Verify email from Ecommerce App",
+        text: "",
+        html: VerificationEmail(user.name, verifyCode),
+      });
+
+      return response.json({
+        message: "Check your email",
+        error: false,
+        success: true,
+      });
+    }
+  } catch (error) {
+    return response.status(500).json({
+      message: error.message || "Error uploading avatar",
+      error: true,
+      success: false,
+    });
+  }
+}
+
+//verify Forgot Password Otp
+export async function verifyForgotPasswordOtp(request, response) {
+  try {
+    const { email, otp } = request.body;
+
+    const user = await UserModel.findOne({ email: email });
+
+    if (!user) {
+      return response.status(400).json({
+        message: "Email not available",
+        error: true,
+        success: false,
+      });
+    }
+
+    if (!email || !otp) {
+      return response.status(400).json({
+        message: "Provide required field email, otp.",
+        error: true,
+        success: false,
+      });
+    }
+
+    if (otp !== user.otp) {
+      return response.status(400).json({
+        message: "Invalid OTP",
+        error: true,
+        success: false,
+      });
+    }
+
+    const currentTime = new Date().toISOString();
+    if (user.otpExpires < currentTime) {
+      return response.status(400).json({
+        message: "OTP is expired",
+        error: true,
+        success: false,
+      });
+    }
+
+    user.otp = "";
+    user.otpExpires = "";
+
+    await user.save();
+
+    return response.json({
+      message: "verify OTP successfully",
+      error: false,
+      success: true,
+    });
+  } catch (error) {
+    return response.status(500).json({
+      message: error.message || error,
+      error: true,
+      success: false,
+    });
+  }
+}
+
+//reset password
+export async function resetPassword(request, response) {
+  try {
+    const { email, newPassword, confirmPassword } = request.body;
+    if (!email || !newPassword || !confirmPassword) {
+      return response.status(400).json({
+        message: "provide required fields email, newPassword, confirmPassword",
+      });
+    }
+    const user = await UserModel.findOne({ email });
+    if (!user) {
+      return response.status(400).json({
+        message: "Email not available",
+        error: true,
+        success: false,
+      });
+    }
+
+    if (newPassword !== confirmPassword) {
+      return response.status(400).json({
+        message: "NewPassword and confirmPassword must be same ",
+        error: true,
+        success: false,
+      });
+    }
+
+    const salt = await bcryptjs.genSalt(10);
+    const hashPassword = await bcryptjs.hash(confirmPassword, salt);
+
+    user.password = hashPassword;
+    await user.save();
+
+    return response.json({
+      message: "Password update successfully.",
+      error: false,
+      success: true,
+    });
+  } catch (error) {
+    return response.status(500).json({
+      message: error.message || error,
+      error: true,
+      success: false,
+    });
+  }
+}
+
+//refresh token controller
+export async function refreshTokenji(request, response) {
+  try {
+    const refreshToken =
+      request.cookies.refreshToken ||
+      request?.headers?.authorization?.split(" ")[1]; // [bearer token]
+    if (!refreshToken) {
+      return response.status(401).json({
+        message: "Invalid Token",
+        error: true,
+        success: false,
+      });
+    }
+
+    const verifyToken = await jwt.verify(
+      refreshToken,
+      process.env.SECRET_KEY_REFRESH_TOKEN
+    );
+    if (!verifyToken) {
+      return response.status(401).json({
+        message: "Token is expired",
+        error: true,
+        success: false,
+      });
+    }
+
+    const userId = verifyToken?._id;
+    const newAccessToken = await generatedAccessToken(userId);
+
+    const cookiesOption = {
+      httpOnly: true,
+      secure: true,
+      sameSite: "None",
+    };
+    response.cookie("accessToken", newAccessToken, cookiesOption);
+
+    return response.json({
+      message: "New Access token generated",
+      error: false,
+      success: true,
+      data: {
+        accessToken: newAccessToken,
+      },
+    });
+  } catch (error) {
+    return response.status(500).json({
+      message: error.message || error,
+      error: true,
+      success: false,
+    });
+  }
+}
+
+//get login user details
+export async function userDetails(request, response) {
+  try {
+    const userId = request.userId;
+
+    const user = await UserModel.findById(userId).select(
+      "-password -refresh_token"
+    ); //here i don't need password and refresh_token so i minus of both
+
+    return response.json({
+      message: "user details",
+      data : user,
+      error: false,
+      success: true ,
+    });
+  } catch (error) {
+    return response.status(500).json({
+      message: "something is wrong",
+      error: true,
+      success: false,
+    });
+  }
+}
