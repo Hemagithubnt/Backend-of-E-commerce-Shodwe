@@ -7,6 +7,8 @@ import morgan from "morgan";
 import helmet from "helmet";
 import connectDB from "./config/connectDb.js";
 import userRouter from "./route/user.route.js";
+import categoryRouter from "./route/category.route.js";
+import productRouter from "./route/product.route.js";
 const app = express();
 
 // CORS first
@@ -46,6 +48,8 @@ app.get("/", (request, response) => {
 
 // Routes
 app.use('/api/user', userRouter);
+app.use('/api/category', categoryRouter);
+app.use('/api/product', productRouter);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
