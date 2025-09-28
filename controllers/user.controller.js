@@ -102,7 +102,7 @@ export async function verifyEmailController(request, response) {
       return response.status(200).json({
         success: true,
         error: false,
-        message: "Email verified successfully",
+        message: "Email verified successfully ,Please LogIn ",
       });
     } else if (!isCodeValid) {
       return response.status(400).json({
@@ -199,38 +199,35 @@ export async function loginUserController(request, response) {
   }
 }
 
-/// Logout controller
+
+// Logout controller
 export async function logoutController(request, response) {
   try {
-    const userid = request.userId; // middleware
-
-    const cookiesOption = {
+    response.clearCookie("accessToken", {
       httpOnly: true,
       secure: true,
       sameSite: "None",
-    };
-
-    // Remove the undefined variables - just clear cookies by name
-    response.clearCookie("accessToken", cookiesOption);
-    response.clearCookie("refreshToken", cookiesOption);
-
-    const removeRefreshToken = await UserModel.findByIdAndUpdate(userid, {
-      refresh_token: "",
+    });
+    response.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: true,
+      sameSite: "None",
     });
 
     return response.json({
-      message: "Logout successfully",
+      message: "Logout successful",
       error: false,
       success: true,
     });
   } catch (error) {
     return response.status(500).json({
-      message: error.message || error,
+      message: error.message || "Something went wrong",
       error: true,
       success: false,
     });
   }
 }
+
 
 // image upload
 var imagesArr = [];
@@ -599,9 +596,9 @@ export async function userDetails(request, response) {
 
     return response.json({
       message: "user details",
-      data : user,
+      data: user,
       error: false,
-      success: true ,
+      success: true,
     });
   } catch (error) {
     return response.status(500).json({
