@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 const addressSchema = mongoose.Schema(
   {
-    address_line: {
+    address_line1: {
       type: String,
       default: "",
     },
@@ -25,6 +25,10 @@ const addressSchema = mongoose.Schema(
       default: null,
     },
     status: {
+      type: Boolean,
+      default: true,
+    },
+     selected: {
       type: Boolean,
       default: true,
     },

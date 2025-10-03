@@ -355,7 +355,7 @@ export async function updateUserDetails(request, response) {
         name: name,
         mobile: mobile,
         email: email,
-        verify_email: email !== userExist.email ? false : true,
+        verify_email: true,
         password: hashPassword,
         otp: verifyCode !== "" ? verifyCode : null,
         otpExpires: verifyCode !== "" ? Date.now() + 600000 : "",
@@ -376,7 +376,13 @@ export async function updateUserDetails(request, response) {
       message: "User Updated successfully",
       error: false,
       success: true,
-      user: updateUser,
+      user: {
+        name:updateUser?.name,
+        _id:updateUser?._id,
+        email:updateUser?.email,
+        mobile:updateUser?.mobile,
+        avatar:updateUser?.avatar
+      },
     });
   } catch (error) {
     return response.status(500).json({
@@ -407,7 +413,7 @@ export async function forgotPasswordController(request, response) {
 
       await sendEmailFun({
         sendTo: email,
-        subject: "Verify email from Ecommerce App",
+        subject: "Verify OTP from Ecommerce App",
         text: "",
         html: VerificationEmail(user.name, verifyCode),
       });
@@ -469,6 +475,7 @@ export async function verifyForgotPasswordOtp(request, response) {
 
     user.otp = "";
     user.otpExpires = "";
+    user.verify_email = true;
 
     await user.save();
 
@@ -489,16 +496,27 @@ export async function verifyForgotPasswordOtp(request, response) {
 //reset password
 export async function resetPassword(request, response) {
   try {
-    const { email, newPassword, confirmPassword } = request.body;
+    const { email,oldPassword, newPassword, confirmPassword } = request.body;
     if (!email || !newPassword || !confirmPassword) {
       return response.status(400).json({
+        error:true,
+        success:false,
         message: "provide required fields email, newPassword, confirmPassword",
       });
     }
+    
     const user = await UserModel.findOne({ email });
     if (!user) {
       return response.status(400).json({
         message: "Email not available",
+        error: true,
+        success: false,
+      });
+    }
+   const checkPassword = await bcryptjs.compare(oldPassword, user.password);
+    if (!checkPassword) {
+      return response.status(400).json({
+        message: "Your Old password is wrong",
         error: true,
         success: false,
       });
@@ -592,8 +610,9 @@ export async function userDetails(request, response) {
 
     const user = await UserModel.findById(userId).select(
       "-password -refresh_token"
-    ); //here i don't need password and refresh_token so i minus of both
-
+    ).populate('address_details');
+    //here i don't need password and refresh_token so i minus of both 
+// here i use populate for address details, shopping cart and order history attaching to user
     return response.json({
       message: "user details",
       data: user,
