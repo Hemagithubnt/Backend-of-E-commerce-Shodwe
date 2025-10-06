@@ -1,4 +1,24 @@
 {
-  "watch": ["."],
-  "ignore": ["node_modules", ".git", "uploads", "logs"]
+  "watch": [
+    "*.js",
+    "controllers/",
+    "route/",
+    "models/",
+    "middlewares/",
+    "config/"
+  ],
+  "ignore": [
+    "node_modules/",
+    "*.log",
+    "*.txt",
+    ".git/",
+    "public/",
+    "uploads/",
+    "dist/",
+    "build/",
+    "temp/"
+  ],
+  "ext": "js,json",
+  "delay": "1000",
+  "verbose": false
 }

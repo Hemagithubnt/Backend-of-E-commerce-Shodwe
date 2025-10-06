@@ -14,6 +14,7 @@ export async function addAddressController(request, response) {
       selected,
     } = request.body;
     const userId = request.userId;
+
     if (
       !address_line1 ||
       !city ||
@@ -21,7 +22,7 @@ export async function addAddressController(request, response) {
       !pincode ||
       !country ||
       !mobile ||
-      !status
+      status === undefined
     ) {
       return response.status(400).json({
         message: "All fields are required",
@@ -29,6 +30,7 @@ export async function addAddressController(request, response) {
         success: false,
       });
     }
+
     const address = new AddressModel({
       address_line1,
       city,
@@ -40,9 +42,11 @@ export async function addAddressController(request, response) {
       userId,
       selected,
     });
+
     const savedAddress = await address.save();
 
-    const updateAddress = await UserModel.updateOne(
+    // Update user with new address
+    await UserModel.updateOne(
       { _id: userId },
       {
         $push: {
@@ -68,27 +72,25 @@ export async function addAddressController(request, response) {
 
 export async function getAddressController(request, response) {
   try {
-    const address = await AddressModel.find({ userId: request?.query?.userId });
-    if (!address) {
-      return response.status(404).json({
-        message: "No address found",
+    const userId = request?.query?.userId;
+
+    if (!userId) {
+      return response.status(400).json({
+        message: "User ID is required",
         error: true,
         success: false,
       });
-    } else {
-      const updateUser = await UserModel.updateOne(
-        { _id: request?.query?.userId },
-        {
-          $push: {
-            address: address?._id,
-          },
-        }
-      );
     }
+
+    const addresses = await AddressModel.find({ userId });
+
+    // REMOVED THE DATABASE WRITE OPERATION
+    // No need to update user on every GET request
+    // The address is already linked via userId in AddressModel
 
     return response.status(200).json({
       message: "Address fetched successfully",
-      data: address,
+      data: addresses,
       error: false,
       success: true,
     });
@@ -101,47 +103,43 @@ export async function getAddressController(request, response) {
   }
 }
 
-// export async function selectAddressController(request, response) {
-//   try {
-//     const userId = request.userid; //auth middleware
-//     const address = await AddressModel.find({
-//       _id: request.params.id,
-//       userId: userId,
-//     });
+export async function deleteAddressController(request, response) {
+  try {
+    const userId = request.userId;
+    const _id = request.params.addressId;  // ✅ Match the route param name
 
-//       const updateAddress = await AddressModel.find(
-//         request.params.id,
-//         {
-//           selected: request?.body?.selected,
-//         },
-//         { new: true }
-//       );
+    if (!_id) {
+      return response.status(400).json({
+        message: "provide _id",
+        error: true,
+        success: false,
+      });
+    }
 
-//     if (!address) {
-//       return response.status(404).json({
-//         message: "No address found",
-//         error: true,
-//         success: false,
-//       });
-//     } else {
-//       const updateAddress = await AddressModel.findByIdAndUpdate(
-//         request.params.id,
-//         {
-//           selected: request?.body?.selected,
-//         },
-//         { new: true }
-//       );
-//       return response.status(200).json({
-//         error: false,
-//         success: true,
-//         address: updateAddress,
-//       });
-//     }
-//   } catch (error) {
-//     return response.status(500).json({
-//       message: error.message || "Error uploading avatar",
-//       error: true,
-//       success: false,
-//     });
-//   }
-// }
+    const deleteItem = await AddressModel.deleteOne({
+      _id: _id,
+      userId: userId,
+    });
+
+    if (deleteItem.deletedCount === 0) {  // ✅ Check deletedCount
+      return response.status(400).json({ 
+        message: "Address not found", 
+        error: true,
+        success: false 
+      });
+    }
+
+    return response.json({
+      message: "Address deleted",
+      success: true,
+      error: false,
+      data: deleteItem,
+    });
+  } catch (error) {
+    return response.status(500).json({
+      message: error.message,
+      success: false,
+      error: true,
+    });
+  }
+}

@@ -6,7 +6,7 @@ const categorySchema = mongoose.Schema({
     required: true,
     trim: true,
   },
-  // 🔧 FIX: changed from String → Array of Strings
+
   images: [
     {
       type: String,

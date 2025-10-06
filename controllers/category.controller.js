@@ -248,16 +248,32 @@ export async function removeCategory(request, response) {
   }
 }
 
+
 // Update Category (with optional image upload)
 export async function updateCategory(request, response) {
   try {
     const files = request.files || [];
     const imagesArr = [];
 
+    // FIX: Get existing category first
+    const existingCategory = await CategoryModel.findById(request.params.id);
+    
+    if (!existingCategory) {
+      return response.status(404).json({
+        message: "Category not found",
+        success: false,
+        error: true,
+      });
+    }
+
     // If new images are uploaded, process them
     if (files.length > 0) {
-      const options = { use_filename: true, unique_filename: false, overwrite: false };
-
+      const options = { 
+        use_filename: true, 
+        unique_filename: false, 
+        overwrite: false 
+      };
+      
       for (let i = 0; i < files.length; i++) {
         const result = await cloudinary.uploader.upload(files[i].path, options);
         imagesArr.push(result.secure_url);
@@ -272,9 +288,11 @@ export async function updateCategory(request, response) {
       parentCatName: request.body.parentCatName || null,
     };
 
-    // If new images provided → replace
+    // FIX: If new images provided → use new, otherwise keep existing
     if (imagesArr.length > 0) {
       updateData.images = imagesArr;
+    } else {
+      updateData.images = existingCategory.images; //  Keep old images!
     }
 
     const category = await CategoryModel.findByIdAndUpdate(
@@ -297,7 +315,6 @@ export async function updateCategory(request, response) {
       success: true,
       error: false,
     });
-
   } catch (error) {
     return response.status(500).json({
       message: error.message || "Internal server error",
@@ -306,6 +323,49 @@ export async function updateCategory(request, response) {
     });
   }
 }
+
+// ✅ NEW: Get subcategories with parent category data (for E-commerce)
+export async function getSubCategoriesWithParent(request, response) {
+  try {
+    // Get all categories
+    const allCategories = await CategoryModel.find();
+    
+    // Filter subcategories (those with parentId)
+    const subCategories = allCategories.filter(cat => cat.parentId !== null && cat.parentId !== undefined);
+    
+    // Enhance each subcategory with parent category data
+    const enrichedSubCategories = subCategories.map(subCat => {
+      // Find parent category
+      const parentCategory = allCategories.find(cat => cat._id.toString() === subCat.parentId.toString());
+      
+      return {
+        _id: subCat._id,
+        name: subCat.name, // Subcategory name
+        parentCatName: subCat.parentCatName, // Parent category name
+        parentId: subCat.parentId,
+        images: parentCategory ? parentCategory.images : [], // ✅ Parent category images!
+        createdAt: subCat.createdAt,
+        updatedAt: subCat.updatedAt,
+        parentCategory: parentCategory // Full parent data
+      };
+    });
+
+    return response.status(200).json({
+      success: true,
+      error: false,
+      data: enrichedSubCategories,
+    });
+
+  } catch (error) {
+    return response.status(500).json({
+      message: error.message || "Error fetching subcategories",
+      error: true,
+      success: false,
+    });
+  }
+}
+
+
 
 
 
