@@ -66,7 +66,6 @@ const productSchema = mongoose.Schema(
     category: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Category",
-      required: true,
     },
 
     countInStock: {
@@ -89,6 +88,10 @@ const productSchema = mongoose.Schema(
       required: [true, "Discount is required"],
       min: [0, "Discount cannot be negative"],
       max: [100, "Discount cannot exceed 100%"],
+    },
+    sale:{
+      type: Number,
+      default: 0
     },
     productRam: [
       {
