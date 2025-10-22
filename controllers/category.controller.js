@@ -249,7 +249,7 @@ export async function removeCategory(request, response) {
 }
 
 
-// Update Category (with optional image upload)
+// Update Category 
 export async function updateCategory(request, response) {
   try {
     const files = request.files || [];
@@ -324,7 +324,7 @@ export async function updateCategory(request, response) {
   }
 }
 
-// ✅ NEW: Get subcategories with parent category data (for E-commerce)
+// Get subcategories with parent category data (for E-commerce)
 export async function getSubCategoriesWithParent(request, response) {
   try {
     // Get all categories

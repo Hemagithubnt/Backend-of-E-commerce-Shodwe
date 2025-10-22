@@ -12,6 +12,7 @@ import productRouter from "./route/product.route.js";
 import cartRouter from "./route/cart.route.js";
 import myListRouter from "./route/myList.route.js";
 import addressRouter from "./route/address.route.js";
+import HomeSlideRouter from "./route/homeSlider.route.js";
 const app = express();
 
 // CORS first
@@ -56,6 +57,7 @@ app.use('/api/product', productRouter);
 app.use('/api/cart', cartRouter);
 app.use('/api/myList', myListRouter);
 app.use('/api/address', addressRouter);
+app.use('/api/homeSlides', HomeSlideRouter);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

@@ -627,3 +627,195 @@ export async function userDetails(request, response) {
     });
   }
 }
+
+//All New Route 
+// ✅ GET ALL USERS - New API for admin
+export async function getAllUsers(request, response) {
+  try {
+    const users = await UserModel.find({})
+      .select("-password -refresh_token -otp -otpExpires")
+      .populate('address_details')
+      .sort({ createdAt: -1 });
+
+    return response.status(200).json({
+      message: "Users fetched successfully",
+      data: users,
+      error: false,
+      success: true,
+    });
+  } catch (error) {
+    return response.status(500).json({
+      message: error.message || "Something went wrong",
+      error: true,
+      success: false,
+    });
+  }
+}
+
+// ✅ GET SINGLE USER BY ID - New API
+export async function getSingleUser(request, response) {
+  try {
+    const { id } = request.params;
+    
+    const user = await UserModel.findById(id)
+      .select("-password -refresh_token -otp -otpExpires")
+      .populate('address_details')
+      .populate('shopping_cart')
+      .populate('orderHistory');
+
+    if (!user) {
+      return response.status(404).json({
+        message: "User not found",
+        error: true,
+        success: false,
+      });
+    }
+
+    return response.status(200).json({
+      message: "User details fetched successfully",
+      data: user,
+      error: false,
+      success: true,
+    });
+  } catch (error) {
+    return response.status(500).json({
+      message: error.message || "Something went wrong",
+      error: true,
+      success: false,
+    });
+  }
+}
+
+// ✅ DELETE SINGLE USER - New API
+export async function deleteUser(request, response) {
+  try {
+    const { id } = request.params;
+    
+    const user = await UserModel.findById(id);
+    if (!user) {
+      return response.status(404).json({
+        message: "User not found",
+        error: true,
+        success: false,
+      });
+    }
+
+    // Remove user avatar from cloudinary if exists
+    if (user.avatar) {
+      const imgUrl = user.avatar;
+      const urlArr = imgUrl.split("/");
+      const image = urlArr[urlArr.length - 1];
+      const imageName = image.split(".")[0];
+      
+      if (imageName) {
+        await cloudinary.uploader.destroy(imageName);
+      }
+    }
+
+    await UserModel.findByIdAndDelete(id);
+
+    return response.status(200).json({
+      message: "User deleted successfully",
+      error: false,
+      success: true,
+    });
+  } catch (error) {
+    return response.status(500).json({
+      message: error.message || "Something went wrong",
+      error: true,
+      success: false,
+    });
+  }
+}
+
+// ✅ DELETE MULTIPLE USERS - New API
+export async function deleteMultipleUsers(request, response) {
+  try {
+    const { ids } = request.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return response.status(400).json({
+        message: "Please provide valid user IDs",
+        error: true,
+        success: false,
+      });
+    }
+
+    // Get users to delete their avatars from cloudinary
+    const users = await UserModel.find({ _id: { $in: ids } });
+    
+    // Delete avatars from cloudinary
+    for (const user of users) {
+      if (user.avatar) {
+        const imgUrl = user.avatar;
+        const urlArr = imgUrl.split("/");
+        const image = urlArr[urlArr.length - 1];
+        const imageName = image.split(".")[0];
+        
+        if (imageName) {
+          await cloudinary.uploader.destroy(imageName);
+        }
+      }
+    }
+
+    // Delete users from database
+    const result = await UserModel.deleteMany({ _id: { $in: ids } });
+
+    return response.status(200).json({
+      message: `${result.deletedCount} users deleted successfully`,
+      error: false,
+      success: true,
+      deletedCount: result.deletedCount,
+    });
+  } catch (error) {
+    return response.status(500).json({
+      message: error.message || "Something went wrong",
+      error: true,
+      success: false,
+    });
+  }
+}
+
+// ✅ UPDATE USER STATUS - New API for admin
+export async function updateUserStatus(request, response) {
+  try {
+    const { id } = request.params;
+    const { status } = request.body;
+
+    if (!["Active", "Inactive", "Suspended"].includes(status)) {
+      return response.status(400).json({
+        message: "Invalid status. Must be Active, Inactive, or Suspended",
+        error: true,
+        success: false,
+      });
+    }
+
+    const user = await UserModel.findByIdAndUpdate(
+      id,
+      { status: status },
+      { new: true }
+    ).select("-password -refresh_token -otp -otpExpires");
+
+    if (!user) {
+      return response.status(404).json({
+        message: "User not found",
+        error: true,
+        success: false,
+      });
+    }
+
+    return response.status(200).json({
+      message: "User status updated successfully",
+      data: user,
+      error: false,
+      success: true,
+    });
+  } catch (error) {
+    return response.status(500).json({
+      message: error.message || "Something went wrong",
+      error: true,
+      success: false,
+    });
+  }
+}
+

@@ -1,7 +1,13 @@
 import { Router } from "express";
 import { forgotPasswordController, loginUserController, logoutController, refreshTokenji, registerUserController, removeImageFromCloudinary, resetPassword, updateUserDetails,
 userAvatarController, userDetails, verifyEmailController, 
-verifyForgotPasswordOtp} from "../controllers/user.controller.js";
+verifyForgotPasswordOtp,
+  // ✅ New imports
+  getAllUsers,
+  getSingleUser,  
+  deleteUser,
+  deleteMultipleUsers,
+  updateUserStatus} from "../controllers/user.controller.js";
 import auth from "../middlewares/auth.js";
 import upload from "../middlewares/multer.js";
 
@@ -19,6 +25,13 @@ userRouter.post('/verify-forgot-password-otp', verifyForgotPasswordOtp);
 userRouter.post('/reset-password', resetPassword);
 userRouter.post('/refresh-Token', refreshTokenji);
 userRouter.get('/user-details',auth, userDetails);
+
+// ✅ NEW ADMIN ROUTES FOR USER MANAGEMENT
+userRouter.get("/", auth, getAllUsers); // Get all users
+userRouter.get("/:id", auth, getSingleUser); // Get single user
+userRouter.delete("/:id", auth, deleteUser); // Delete single user
+userRouter.post("/deleteMultiple", auth, deleteMultipleUsers); // Delete multiple users
+userRouter.put("/status/:id", auth, updateUserStatus); // Update user status
 
 
 
