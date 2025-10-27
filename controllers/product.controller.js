@@ -16,14 +16,19 @@ cloudinary.config({
 // COMBINED API - Upload images + Create/Update Product
 export async function createProduct(request, response) {
   try {
-    const files = request.files || [];
-    const { productId } = request.body; // Optional - for updating existing product
+    // CHANGED: read files as a map so we can access both "images" and "bannerImages" without breaking old behavior
+    const filesByField = request.files || {}; // CHANGED
+    const imageFiles = Array.isArray(filesByField)
+      ? filesByField
+      : filesByField.images || []; // CHANGED: backward compatibility with upload.array("images")
+    const bannerFiles = filesByField.bannerImages || []; // NEW: banner images array
+
     const imagesArr = [];
 
-    // 🔹 Step 1: Upload images to Cloudinary (if any)
-    if (files.length > 0) {
-      for (let i = 0; i < files.length; i++) {
-        const result = await cloudinary.uploader.upload(files[i].path, {
+    // Step 1: Upload images to Cloudinary (if any)
+    if (imageFiles.length > 0) {
+      for (let i = 0; i < imageFiles.length; i++) {
+        const result = await cloudinary.uploader.upload(imageFiles[i].path, {
           use_filename: true,
           unique_filename: false,
           overwrite: false,
@@ -31,13 +36,31 @@ export async function createProduct(request, response) {
         imagesArr.push(result.secure_url);
 
         // Clean up local file
-        fs.unlinkSync(files[i].path);
+        fs.unlinkSync(imageFiles[i].path);
       }
     }
 
+    // NEW: Upload banner images (if any)
+    const bannerUrls = []; // NEW
+    if (bannerFiles.length > 0) {
+      // NEW
+      for (let i = 0; i < bannerFiles.length; i++) {
+        // NEW
+        const result = await cloudinary.uploader.upload(bannerFiles[i].path, {
+          // NEW
+          use_filename: true, // NEW
+          unique_filename: false, // NEW
+          overwrite: false, // NEW
+        }); // NEW
+        bannerUrls.push(result.secure_url); // NEW
+        fs.unlinkSync(bannerFiles[i].path); // NEW
+      } // NEW
+    } // NEW
+
     let product;
 
-    // 🔹 Step 2: Create or Update Product
+    // Step 2: Create or Update Product
+    const productId = request.body.productId; // NEW: safely read if client sends productId in body for upsert-like behavior
     if (productId) {
       // Update existing product
       product = await ProductModel.findById(productId);
@@ -53,7 +76,7 @@ export async function createProduct(request, response) {
       product = new ProductModel();
     }
 
-    // 🔹 Step 3: Parse array fields SAFELY (FIX FOR NESTED ARRAYS)
+    // Step 3: Parse array fields SAFELY (FIX FOR NESTED ARRAYS)
     let productRam = [];
     let size = [];
     let productWeight = [];
@@ -95,10 +118,9 @@ export async function createProduct(request, response) {
       // Keep empty arrays if parsing fails
     }
 
-    console.log("✅ Parsed Arrays:", { productRam, size, productWeight });
-
-    // 🔹 Step 4: Update product fields
+    //  Step 4: Update product fields
     product.name = request.body.name || product.name;
+    product.isDisplayOnHomeBanner = request.body.isDisplayOnHomeBanner;
     product.description = request.body.description || product.description;
     product.brand = request.body.brand || product.brand;
     product.price = request.body.price || product.price;
@@ -115,6 +137,14 @@ export async function createProduct(request, response) {
     product.isFeatured = request.body.isFeatured || product.isFeatured;
     product.discount = request.body.discount || product.discount;
 
+    // NEW: Assign banner fields (title + multiple images)
+    if (typeof request.body.bannerTitleName === "string") {
+      product.bannerTitleName = request.body.bannerTitleName;
+    }
+    if (bannerUrls.length > 0) {
+      product.bannerimages = [...(product.bannerimages || []), ...bannerUrls];
+    }
+
     // CRITICAL FIX: Assign parsed arrays (not raw request.body values)
     product.productRam =
       productRam.length > 0 ? productRam : product.productRam || [];
@@ -122,12 +152,12 @@ export async function createProduct(request, response) {
     product.productWeight =
       productWeight.length > 0 ? productWeight : product.productWeight || [];
 
-    // 🔹 Step 5: Add new images to existing images
+    // Step 5: Add new images to existing images
     if (imagesArr.length > 0) {
       product.images = [...(product.images || []), ...imagesArr];
     }
 
-    // 🔹 Step 6: Save to database
+    // Step 6: Save to database
     await product.save();
 
     return response.status(200).json({
@@ -165,7 +195,7 @@ export async function getAllProducts(request, response) {
     }
 
     const products = await ProductModel.find()
-      .populate("category")
+      .populate({ path: "category", strictPopulate: false })
       .skip((page - 1) * perPage)
       .limit(perPage)
       .exec();
@@ -215,7 +245,7 @@ export async function getAllProductsByCatId(request, response) {
     const products = await ProductModel.find({
       CatId: request.params.id,
     })
-      .populate("category")
+      .populate({ path: "category", strictPopulate: false })
       .skip((page - 1) * perPage)
       .limit(perPage)
       .exec();
@@ -265,7 +295,7 @@ export async function getAllProductsByCatName(request, response) {
     const products = await ProductModel.find({
       catName: request.query.catName,
     })
-      .populate("category")
+     .populate({ path: "category", strictPopulate: false })
       .skip((page - 1) * perPage)
       .limit(perPage)
       .exec();
@@ -315,7 +345,7 @@ export async function getAllProductsBySubCatId(request, response) {
     const products = await ProductModel.find({
       subCatId: request.params.id,
     })
-      .populate("category")
+     .populate({ path: "category", strictPopulate: false })
       .skip((page - 1) * perPage)
       .limit(perPage)
       .exec();
@@ -365,7 +395,7 @@ export async function getAllProductsBySubCatName(request, response) {
     const products = await ProductModel.find({
       subCat: request.query.subCat,
     })
-      .populate("category")
+     .populate({ path: "category", strictPopulate: false })
       .skip((page - 1) * perPage)
       .limit(perPage)
       .exec();
@@ -415,7 +445,7 @@ export async function getAllProductsByThirdLevelSubCatId(request, response) {
     const products = await ProductModel.find({
       thirdsubCatId: request.params.id,
     })
-      .populate("category")
+      .populate({ path: "category", strictPopulate: false })
       .skip((page - 1) * perPage)
       .limit(perPage)
       .exec();
@@ -465,7 +495,7 @@ export async function getAllProductsByThirdLevelSubCatName(request, response) {
     const products = await ProductModel.find({
       thirdsubCat: request.query.thirdsubCat,
     })
-      .populate("category")
+     .populate({ path: "category", strictPopulate: false })
       .skip((page - 1) * perPage)
       .limit(perPage)
       .exec();
@@ -503,7 +533,7 @@ export async function getAllProductsByPrice(request, response) {
   if (request.query.catId !== "" && request.query.catId !== undefined) {
     const productListArr = await ProductModel.find({
       CatId: request.query.catId, // ✅ FIX: CatId (capital C) matches your schema
-    }).populate("category");
+    }).populate({ path: "category", strictPopulate: false });
 
     productList = productListArr;
   }
@@ -511,7 +541,7 @@ export async function getAllProductsByPrice(request, response) {
   if (request.query.subCatId !== "" && request.query.subCatId !== undefined) {
     const productListArr = await ProductModel.find({
       subCatId: request.query.subCatId,
-    }).populate("category");
+    }).populate({ path: "category", strictPopulate: false });
 
     productList = productListArr;
   }
@@ -522,7 +552,7 @@ export async function getAllProductsByPrice(request, response) {
   ) {
     const productListArr = await ProductModel.find({
       thirdsubCatId: request.query.thirdsubCatId,
-    }).populate("category");
+    }).populate({ path: "category", strictPopulate: false });
 
     productList = productListArr;
   }
@@ -537,7 +567,7 @@ export async function getAllProductsByPrice(request, response) {
     }
     if (
       request.query.maxPrice &&
-      product.price > parseInt(request.query.maxPrice) // ✅ FIXED (was < before)
+      product.price > parseInt(request.query.maxPrice)
     ) {
       return false;
     }
@@ -548,7 +578,7 @@ export async function getAllProductsByPrice(request, response) {
     error: false,
     success: true,
     products: filteredProducts,
-    totalPages: 0, // ✅ you can later replace with pagination if needed
+    totalPages: 0, 
     page: 0,
   });
 }
@@ -603,7 +633,7 @@ export async function getAllProductsByRating(request, response) {
 
     //  Get products with the same filter
     const products = await ProductModel.find(filter)
-      .populate("category")
+     .populate({ path: "category", strictPopulate: false })
       .skip((page - 1) * perPage)
       .limit(perPage)
       .sort({ rating: -1, createdAt: -1 }) // Sort by highest rating first
@@ -683,7 +713,7 @@ export async function getProductsByRatingRange(request, response) {
     }
 
     const products = await ProductModel.find(filter)
-      .populate("category")
+     .populate({ path: "category", strictPopulate: false })
       .skip((page - 1) * perPage)
       .limit(perPage)
       .sort({ rating: -1, createdAt: -1 })
@@ -755,7 +785,7 @@ export async function getAllFeaturedProducts(request, response) {
   try {
     const products = await ProductModel.find({
       isFeatured: true,
-    }).populate("category");
+    }).populate({ path: "category", strictPopulate: false });
 
     if (!products) {
       return response.status(500).json({
@@ -783,9 +813,7 @@ export async function getAllFeaturedProducts(request, response) {
 
 //delete single Product
 export async function deleteProduct(request, response) {
-  const product = await ProductModel.findById(request.params.id).populate(
-    "category"
-  );
+  const product = await ProductModel.findById(request.params.id).populate({ path: "category", strictPopulate: false })
   if (!product) {
     return response.status(404).json({
       message: "No products found",
@@ -865,31 +893,24 @@ export async function deleteMultipleProduct(req, res) {
         .status(404)
         .json({ success: false, error: true, message: "No products deleted" });
     }
-    return res
-      .status(200)
-      .json({
-        success: true,
-        error: false,
-        message: `${deletedCount} deleted`,
-      });
+    return res.status(200).json({
+      success: true,
+      error: false,
+      message: `${deletedCount} deleted`,
+    });
   } catch (err) {
-    console.error("❌ deleteMultipleProduct error:", err);
-    return res
-      .status(500)
-      .json({
-        success: false,
-        error: true,
-        message: err.message || "Server error",
-      });
+    return res.status(500).json({
+      success: false,
+      error: true,
+      message: err.message || "Server error",
+    });
   }
 }
 
 //get single product
 export async function getSingleProduct(request, response) {
   try {
-    const product = await ProductModel.findById(request.params.id).populate(
-      "category"
-    );
+    const product = await ProductModel.findById(request.params.id).populate({ path: "category", strictPopulate: false });
 
     if (!product) {
       return response.status(404).json({
@@ -935,84 +956,22 @@ export async function removeImageFromCloudinary(request, response) {
   }
 }
 
-//Update productDetails
+// Helper to derive Cloudinary public_id from URL if you don't store it
+function getPublicIdFromUrl(url) {
+  try {
+    const cleanUrl = url.split("?")[0];
+    const parts = cleanUrl.split("/upload/");
+    if (parts.length < 2) return null;
+    const afterUpload = parts[1].replace(/^v[0-9]+\/+/, "");
+    const withoutExt = afterUpload.replace(/\.[^/.]+$/, "");
+    return withoutExt || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function updateProduct(request, response) {
   try {
-    console.log("📦 Update Request Body:", request.body); // Debug
-
-    const files = request.files || [];
-    const imagesArr = [];
-
-    // Step 1: Upload new images to Cloudinary
-    if (files.length > 0) {
-      for (let i = 0; i < files.length; i++) {
-        try {
-          const result = await cloudinary.uploader.upload(files[i].path, {
-            use_filename: true,
-            unique_filename: false,
-            overwrite: false,
-          });
-          imagesArr.push(result.secure_url);
-          fs.unlinkSync(files[i].path);
-        } catch (uploadError) {
-          console.error("Error uploading image:", uploadError);
-          if (fs.existsSync(files[i].path)) {
-            fs.unlinkSync(files[i].path);
-          }
-        }
-      }
-    }
-
-    // Step 2: Parse JSON arrays SAFELY with validation
-    let productRam = [];
-    let size = [];
-    let productWeight = [];
-
-    try {
-      if (
-        request.body.productRam &&
-        request.body.productRam !== "undefined" &&
-        request.body.productRam !== "[]"
-      ) {
-        const parsed = JSON.parse(request.body.productRam);
-        productRam = Array.isArray(parsed) ? parsed : [];
-      }
-    } catch (e) {
-      console.log("productRam parse error:", e);
-      productRam = [];
-    }
-
-    try {
-      if (
-        request.body.size &&
-        request.body.size !== "undefined" &&
-        request.body.size !== "[]"
-      ) {
-        const parsed = JSON.parse(request.body.size);
-        size = Array.isArray(parsed) ? parsed : [];
-      }
-    } catch (e) {
-      console.log("size parse error:", e);
-      size = [];
-    }
-
-    try {
-      if (
-        request.body.productWeight &&
-        request.body.productWeight !== "undefined" &&
-        request.body.productWeight !== "[]"
-      ) {
-        const parsed = JSON.parse(request.body.productWeight);
-        productWeight = Array.isArray(parsed) ? parsed : [];
-      }
-    } catch (e) {
-      console.log("productWeight parse error:", e);
-      productWeight = [];
-    }
-
-    console.log(" Parsed Arrays:", { productRam, size, productWeight }); // Debug
-
-    // Step 3: Get existing product
     const existingProduct = await ProductModel.findById(request.params.id);
     if (!existingProduct) {
       return response.status(404).json({
@@ -1022,22 +981,103 @@ export async function updateProduct(request, response) {
       });
     }
 
-    // Step 4: Parse existing images
+    // Support both array('images') and fields
+    const filesByField = request.files || {};
+    const imageFiles = Array.isArray(filesByField)
+      ? filesByField
+      : filesByField.images || [];
+    const bannerFiles = filesByField.bannerImages || [];
+
+    // Upload product images
+    const imagesArr = [];
+    if (imageFiles.length > 0) {
+      for (let i = 0; i < imageFiles.length; i++) {
+        try {
+          const result = await cloudinary.uploader.upload(imageFiles[i].path, {
+            use_filename: true,
+            unique_filename: false,
+            overwrite: false,
+          });
+          imagesArr.push(result.secure_url);
+        } catch (e) {
+          console.log("Image upload failed:", e?.message);
+        } finally {
+          if (fs.existsSync(imageFiles[i].path))
+            fs.unlinkSync(imageFiles[i].path);
+        }
+      }
+    }
+
+    // Upload banner images
+    const bannerUrls = [];
+    if (bannerFiles.length > 0) {
+      for (let i = 0; i < bannerFiles.length; i++) {
+        try {
+          const result = await cloudinary.uploader.upload(bannerFiles[i].path, {
+            use_filename: true,
+            unique_filename: false,
+            overwrite: false,
+          });
+          bannerUrls.push(result.secure_url);
+        } catch (e) {
+          console.log("Banner upload failed:", e?.message);
+        } finally {
+          if (fs.existsSync(bannerFiles[i].path))
+            fs.unlinkSync(bannerFiles[i].path);
+        }
+      }
+    }
+
+    // Parse arrays (same as you already had) ...
+    let productRam = [];
+    let size = [];
+    let productWeight = [];
+    try {
+      if (
+        request.body.productRam &&
+        request.body.productRam !== "undefined" &&
+        request.body.productRam !== "[]"
+      ) {
+        const parsed = JSON.parse(request.body.productRam);
+        productRam = Array.isArray(parsed) ? parsed : [];
+      }
+    } catch {}
+    try {
+      if (
+        request.body.size &&
+        request.body.size !== "undefined" &&
+        request.body.size !== "[]"
+      ) {
+        const parsed = JSON.parse(request.body.size);
+        size = Array.isArray(parsed) ? parsed : [];
+      }
+    } catch {}
+    try {
+      if (
+        request.body.productWeight &&
+        request.body.productWeight !== "undefined" &&
+        request.body.productWeight !== "[]"
+      ) {
+        const parsed = JSON.parse(request.body.productWeight);
+        productWeight = Array.isArray(parsed) ? parsed : [];
+      }
+    } catch {}
+
+    // Parse existing product images carry-over
     let existingImages = [];
     try {
       if (request.body.existingImages) {
         existingImages = JSON.parse(request.body.existingImages);
       }
-    } catch (e) {
+    } catch {
       existingImages = existingProduct.images || [];
     }
-
-    // Step 5: Combine images
     const allImages = [...existingImages, ...imagesArr];
 
-    //  Step 6: Build update object - CRITICAL FIXES
+    // Build updateData baseline
     const updateData = {
       name: request.body.name,
+      isDisplayOnHomeBanner: request.body.isDisplayOnHomeBanner,
       description: request.body.description,
       images: allImages.length > 0 ? allImages : existingProduct.images,
       brand: request.body.brand,
@@ -1054,26 +1094,86 @@ export async function updateProduct(request, response) {
       isFeatured:
         request.body.isFeatured === "true" || request.body.isFeatured === true,
       discount: request.body.discount,
-      productRam: productRam,
-      size: size,
-      productWeight: productWeight,
+      productRam,
+      size,
+      productWeight,
     };
 
-    //  CRITICAL FIX: Handle category ObjectId properly
+    // Update banner title
+    if (typeof request.body.bannerTitleName === "string") {
+      updateData.bannerTitleName = request.body.bannerTitleName;
+    }
+
+    // 1) Handle individual deletions of existing banner images via deleteBannerUrls
+    let deleteBannerUrls = [];
+    try {
+      if (request.body.deleteBannerUrls) {
+        const parsed = JSON.parse(request.body.deleteBannerUrls);
+        if (Array.isArray(parsed)) {
+          deleteBannerUrls = parsed.filter((u) => typeof u === "string");
+        }
+      }
+    } catch {}
+    if (deleteBannerUrls.length > 0) {
+      // Cloudinary destroy
+      for (const url of deleteBannerUrls) {
+        const publicId = getPublicIdFromUrl(url);
+        if (publicId) {
+          try {
+            await cloudinary.uploader.destroy(publicId);
+            console.log("Deleted banner from Cloudinary:", publicId);
+          } catch (err) {
+            console.log("Cloudinary delete failed:", publicId, err?.message);
+          }
+        }
+      }
+      // Prune from DB baseline
+      const baseline = Array.isArray(existingProduct.bannerimages)
+        ? existingProduct.bannerimages
+        : [];
+      const pruned = baseline.filter((u) => !deleteBannerUrls.includes(u));
+      updateData.bannerimages = pruned; // set baseline to pruned list
+    } else {
+      // initialize baseline if not pruned earlier
+      updateData.bannerimages = Array.isArray(existingProduct.bannerimages)
+        ? existingProduct.bannerimages
+        : [];
+    }
+
+    // 2) Apply replace vs append for newly uploaded banners
+    const shouldReplaceBanner = request.body.replaceBanner === "true";
+    if (bannerUrls.length > 0) {
+      if (shouldReplaceBanner) {
+        // delete all old banners first (safer when replacing everything)
+        for (const oldUrl of updateData.bannerimages) {
+          const publicId = getPublicIdFromUrl(oldUrl);
+          if (publicId) {
+            try {
+              await cloudinary.uploader.destroy(publicId);
+            } catch {}
+          }
+        }
+        updateData.bannerimages = bannerUrls;
+      } else {
+        updateData.bannerimages = [...updateData.bannerimages, ...bannerUrls];
+      }
+    }
+
+    // Handle category ObjectId
     if (
       request.body.CatId &&
       request.body.CatId !== "undefined" &&
       request.body.CatId !== "[object Object]" &&
       mongoose.Types.ObjectId.isValid(request.body.CatId)
     ) {
-      updateData.category = request.body.CatId; // ✅ Use CatId as category ObjectId
+      updateData.category = request.body.CatId;
     }
 
-    // Step 7: Update product
+    // Save
     const product = await ProductModel.findByIdAndUpdate(
       request.params.id,
       updateData,
-      { new: true, runValidators: false } // ✅ Disable validators for update
+      { new: true, runValidators: false }
     );
 
     if (!product) {
@@ -1088,7 +1188,7 @@ export async function updateProduct(request, response) {
       message: "Product is Updated Successfully",
       success: true,
       error: false,
-      product: product,
+      product,
     });
   } catch (error) {
     return response.status(500).json({
@@ -1098,7 +1198,6 @@ export async function updateProduct(request, response) {
     });
   }
 }
-
 // (1) These are controller related to ProductRAMS----
 
 // Create New ProductRAMS
@@ -1163,19 +1262,19 @@ export async function deleteProductRAMS(request, response) {
 }
 
 //delete multiple ProductRAMS
-export async function deleteMultipleProductRAMS(request, response) {  
+export async function deleteMultipleProductRAMS(request, response) {
   try {
     const { ids } = request.body;
 
     if (!ids || !Array.isArray(ids)) {
-      return response.status(400).json({ 
-        success: false, 
-        error: true, 
-        message: "No IDs provided" 
+      return response.status(400).json({
+        success: false,
+        error: true,
+        message: "No IDs provided",
       });
     }
 
-    await productRAMSModel.deleteMany({ _id: { $in: ids } });  
+    await productRAMSModel.deleteMany({ _id: { $in: ids } });
 
     return response.status(200).json({
       success: true,
@@ -1192,16 +1291,15 @@ export async function deleteMultipleProductRAMS(request, response) {
   }
 }
 
-
-//Update productRAM 
+//Update productRAM
 export async function updateProductRAMS(request, response) {
   try {
-    const productRAMS = await productRAMSModel.findByIdAndUpdate(  // ✅ FIX: Remove "new" keyword, add "await"
+    const productRAMS = await productRAMSModel.findByIdAndUpdate(
       request.params.id,
-      {  // ✅ FIX: Add opening brace
+      {
         name: request.body.name,
       },
-      { new: true }  // Return updated document
+      { new: true } // Return updated document
     );
 
     if (!productRAMS) {
@@ -1216,7 +1314,7 @@ export async function updateProductRAMS(request, response) {
       message: "ProductRAMS updated successfully!",
       success: true,
       error: false,
-      data: productRAMS,  // ✅ Return updated data
+      data: productRAMS, // ✅ Return updated data
     });
   } catch (error) {
     console.error("Error updating ProductRAMS:", error);
@@ -1228,12 +1326,11 @@ export async function updateProductRAMS(request, response) {
   }
 }
 
-
-//Get all productRAMS 
+//Get all productRAMS
 export async function getProductRAMS(request, response) {
   try {
     const productRAM = await productRAMSModel.find();
-   if (!productRAM) {
+    if (!productRAM) {
       return response.status(404).json({
         message: "ProductRAMS can not be get!",
         success: false,
@@ -1242,11 +1339,10 @@ export async function getProductRAMS(request, response) {
     }
 
     return response.status(200).json({
-     success: true,
+      success: true,
       error: false,
-      data: productRAM
+      data: productRAM,
     });
-
   } catch (error) {
     return response.status(500).json({
       message: error.message,
@@ -1260,7 +1356,7 @@ export async function getProductRAMS(request, response) {
 export async function getProductRAMSById(request, response) {
   try {
     const productRAM = await productRAMSModel.findById(request.params.id);
-   if (!productRAM) {
+    if (!productRAM) {
       return response.status(404).json({
         message: "ProductRAMS can not be get!",
         success: false,
@@ -1269,11 +1365,10 @@ export async function getProductRAMSById(request, response) {
     }
 
     return response.status(200).json({
-     success: true,
+      success: true,
       error: false,
-      data: productRAM
+      data: productRAM,
     });
-
   } catch (error) {
     return response.status(500).json({
       message: error.message,
@@ -1311,14 +1406,14 @@ export async function createProductWeight(request, response) {
       message: error.message,
       success: false,
       error: true,
-      data: productWeight
+      data: productWeight,
     });
   }
 }
 
 //delete single ProductWeight
 export async function deleteProductWeight(request, response) {
-const productWeight = await ProductWeightModel.findById(request.params.id);
+  const productWeight = await ProductWeightModel.findById(request.params.id);
 
   if (!productWeight) {
     return response.status(404).json({
@@ -1348,19 +1443,19 @@ const productWeight = await ProductWeightModel.findById(request.params.id);
 }
 
 //delete multiple ProductWeight
-export async function deleteMultipleProductWeight(request, response) {  
+export async function deleteMultipleProductWeight(request, response) {
   try {
     const { ids } = request.body;
 
     if (!ids || !Array.isArray(ids)) {
-      return response.status(400).json({ 
-        success: false, 
-        error: true, 
-        message: "No IDs provided" 
+      return response.status(400).json({
+        success: false,
+        error: true,
+        message: "No IDs provided",
       });
     }
 
-    await ProductWeightModel.deleteMany({ _id: { $in: ids } });  
+    await ProductWeightModel.deleteMany({ _id: { $in: ids } });
 
     return response.status(200).json({
       success: true,
@@ -1376,16 +1471,15 @@ export async function deleteMultipleProductWeight(request, response) {
   }
 }
 
-
 //Update productWeight
 export async function updateProductWeight(request, response) {
   try {
-    const productWeight = await ProductWeightModel.findByIdAndUpdate(  
+    const productWeight = await ProductWeightModel.findByIdAndUpdate(
       request.params.id,
-      {  
+      {
         name: request.body.name,
       },
-      { new: true }  
+      { new: true }
     );
 
     if (!productWeight) {
@@ -1400,7 +1494,7 @@ export async function updateProductWeight(request, response) {
       message: "productWeight updated successfully!",
       success: true,
       error: false,
-      data: productWeight,  
+      data: productWeight,
     });
   } catch (error) {
     console.error("Error updating ProductRAMS:", error);
@@ -1412,12 +1506,11 @@ export async function updateProductWeight(request, response) {
   }
 }
 
-
 //Get all productWeight
 export async function getProductWeight(request, response) {
   try {
     const productWeight = await ProductWeightModel.find();
-   if (!productWeight) {
+    if (!productWeight) {
       return response.status(404).json({
         message: "productWeight can not be get!",
         success: false,
@@ -1426,11 +1519,10 @@ export async function getProductWeight(request, response) {
     }
 
     return response.status(200).json({
-     success: true,
+      success: true,
       error: false,
-      data: productWeight
+      data: productWeight,
     });
-
   } catch (error) {
     return response.status(500).json({
       message: error.message,
@@ -1444,7 +1536,7 @@ export async function getProductWeight(request, response) {
 export async function getProductWeightById(request, response) {
   try {
     const productWeight = await ProductWeightModel.findById(request.params.id);
-   if (!productWeight) {
+    if (!productWeight) {
       return response.status(404).json({
         message: "productWeight can not be get!",
         success: false,
@@ -1453,11 +1545,10 @@ export async function getProductWeightById(request, response) {
     }
 
     return response.status(200).json({
-     success: true,
+      success: true,
       error: false,
-      data: productWeight
+      data: productWeight,
     });
-
   } catch (error) {
     return response.status(500).json({
       message: error.message,
@@ -1495,14 +1586,14 @@ export async function createProductSize(request, response) {
       message: error.message,
       success: false,
       error: true,
-      data: productSize
+      data: productSize,
     });
   }
 }
 
 //delete single ProductSize
 export async function deleteProductSize(request, response) {
-const productSize = await ProductSizeModel.findById(request.params.id);
+  const productSize = await ProductSizeModel.findById(request.params.id);
 
   if (!productSize) {
     return response.status(404).json({
@@ -1532,19 +1623,19 @@ const productSize = await ProductSizeModel.findById(request.params.id);
 }
 
 //delete multiple Product size
-export async function deleteMultipleProductSize(request, response) {  
+export async function deleteMultipleProductSize(request, response) {
   try {
     const { ids } = request.body;
 
     if (!ids || !Array.isArray(ids)) {
-      return response.status(400).json({ 
-        success: false, 
-        error: true, 
-        message: "No IDs provided" 
+      return response.status(400).json({
+        success: false,
+        error: true,
+        message: "No IDs provided",
       });
     }
 
-    await ProductSizeModel.deleteMany({ _id: { $in: ids } });  
+    await ProductSizeModel.deleteMany({ _id: { $in: ids } });
 
     return response.status(200).json({
       success: true,
@@ -1563,12 +1654,12 @@ export async function deleteMultipleProductSize(request, response) {
 //Update productSize
 export async function updateProductsize(request, response) {
   try {
-    const productSize = await ProductSizeModel.findByIdAndUpdate(  
+    const productSize = await ProductSizeModel.findByIdAndUpdate(
       request.params.id,
-      {  
+      {
         name: request.body.name,
       },
-      { new: true }  
+      { new: true }
     );
 
     if (!productSize) {
@@ -1583,7 +1674,7 @@ export async function updateProductsize(request, response) {
       message: "productSize updated successfully!",
       success: true,
       error: false,
-      data: productSize,  
+      data: productSize,
     });
   } catch (error) {
     console.error("Error updating productSize:", error);
@@ -1599,7 +1690,7 @@ export async function updateProductsize(request, response) {
 export async function getProductSize(request, response) {
   try {
     const productSize = await ProductSizeModel.find();
-   if (!productSize) {
+    if (!productSize) {
       return response.status(404).json({
         message: "productSize can not be get!",
         success: false,
@@ -1608,11 +1699,10 @@ export async function getProductSize(request, response) {
     }
 
     return response.status(200).json({
-     success: true,
+      success: true,
       error: false,
-      data: productSize
+      data: productSize,
     });
-
   } catch (error) {
     return response.status(500).json({
       message: error.message,
@@ -1626,7 +1716,7 @@ export async function getProductSize(request, response) {
 export async function getProductSizeById(request, response) {
   try {
     const productSize = await ProductSizeModel.findById(request.params.id);
-   if (!productSize) {
+    if (!productSize) {
       return response.status(404).json({
         message: "productSize can not be get!",
         success: false,
@@ -1635,11 +1725,10 @@ export async function getProductSizeById(request, response) {
     }
 
     return response.status(200).json({
-     success: true,
+      success: true,
       error: false,
-      data: productSize
+      data: productSize,
     });
-
   } catch (error) {
     return response.status(500).json({
       message: error.message,
@@ -1649,3 +1738,93 @@ export async function getProductSizeById(request, response) {
   }
 }
 
+//filter product 
+export async function filterProducts(request, response) {
+  try {
+    const {
+      catId,
+      subCatId,
+      thirdsubCatId,
+      minPrice,
+      maxPrice,
+      rating,
+      page,
+      limit,
+    } = request.body;
+
+    const filters = {};
+
+    // ONLY add catId filter if array has items
+    if (catId.length) {
+      filters.CatId = { $in: catId };
+    }
+
+    if (subCatId.length) {
+      filters.subCatId = { $in: subCatId };
+    }
+
+    if (thirdsubCatId.length) {
+      filters.thirdsubCatId = { $in: thirdsubCatId };
+    }
+
+    if (minPrice || maxPrice) {
+      filters.price = { $gte: +minPrice || 0, $lte: +maxPrice || Infinity };
+    }
+
+    if (rating?.length) {
+      filters.rating = { $in: rating };
+    }
+
+    const products = await ProductModel.find(filters)
+     .populate({ path: "category", strictPopulate: false })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit));
+
+    const total = await ProductModel.countDocuments(filters);
+
+    return response.status(200).json({
+      success: true,
+      error: false,
+      message: "Products filtered successfully",
+      products: products,
+      total: total,
+      page: parseInt(page),
+      totalPages: Math.ceil(total / limit),
+    });
+  } catch (error) {
+    return response.status(500).json({
+      message: error.message,
+      success: false,
+      error: true,
+    });
+  }
+}
+
+//sortItems 
+const sortItems = (products, sortBy, order) => {
+  return products.sort((a,b)=>{
+    if (sortBy === 'name') {
+      return order === 'asc' ? a.name.localCompare(b.name) : 
+      b.name.localCompare(a.name)
+    }
+
+    if (sortBy === "price") {
+      return order === 'asc' ? a.price - b.price : b.price - a.price
+    }
+    return;
+  })
+}
+
+export async function sortBy(request,response) {
+  const {products, sortBy, order} = request.body;
+  const sortedItems = sortItems([...products?.products], sortBy, order);
+
+  return response.status(200).json({
+    error:false,
+    success:true,
+    products:sortedItems,
+    page:0,
+    totalPages:0
+  })
+  
+}

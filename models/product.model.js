@@ -111,9 +111,18 @@ const productSchema = mongoose.Schema(
         trim: true,
       },
     ],
-    dateCreated: {
-      type: Date,
-      default: Date.now,
+   bannerimages: 
+   {
+     type: [String],
+     default: [] 
+   },
+     bannerTitleName: {
+      type: String,
+      trim: true,
+    },
+    isDisplayOnHomeBanner: {
+      type: Boolean,
+      default: false,
     },
   },
   {
