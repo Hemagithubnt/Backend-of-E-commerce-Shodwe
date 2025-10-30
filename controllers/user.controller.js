@@ -7,6 +7,7 @@ import generatedAccessToken from "../utils/generatedAccessToken.js";
 import generatedRefreshToken from "../utils/generatedRefreshToken.js";
 import { v2 as cloudinary } from "cloudinary";
 import fs from "fs";
+import ReviewModel from "../models/review.model.js";
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -17,104 +18,212 @@ cloudinary.config({
 //register controller
 export async function registerUserController(request, response) {
   try {
-    let user;
     const { name, email, password } = request.body;
+
+    // 1. Basic validation
     if (!name || !email || !password) {
       return response.status(400).json({
-        message: "provide email, name, password",
+        message: "Please provide all required fields: name, email, and password.",
         error: true,
         success: false,
       });
     }
 
-    user = await UserModel.findOne({ email: email });
-
-    if (user) {
-      return response.json({
-        message: "User already Registered with this email",
+    // 2. Check if user already exists
+    const existingUser = await UserModel.findOne({ email: email });
+    if (existingUser) {
+      // If user exists but is not verified, we can resend OTP.
+      // For simplicity, we'll just send an error for now.
+      return response.status(400).json({
+        message: "A user with this email has already been registered.",
         error: true,
         success: false,
       });
     }
+
+    // 3. Prepare user data
     const verifyCode = Math.floor(100000 + Math.random() * 900000).toString();
     const salt = await bcryptjs.genSalt(10);
     const hashPassword = await bcryptjs.hash(password, salt);
 
     const payload = {
-      name: name,
-      email: email,
+      name,
+      email,
       password: hashPassword,
       otp: verifyCode,
-      otpExpires: Date.now() + 600000, // 10 minutes
+      otpExpires: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes from now
+      
+      // --- THIS IS THE CRITICAL FIX ---
+      signUpWithGoogle: false, // Explicitly set to false for normal registration
+      // ---------------------------------
     };
-    user = new UserModel(payload);
-    await user.save();
 
-    //Send verification email
+    // 4. Create and save the new user
+    const newUser = new UserModel(payload);
+    await newUser.save();
+
+    // 5. Send verification email
     await sendEmailFun({
       sendTo: email,
-      subject: "Verify email from Ecommerce App",
-      text: "",
+      subject: "Verify Your Email for E-commerce Shodwe",
+      text: `Your One-Time Password is: ${verifyCode}`,
       html: VerificationEmail(name, verifyCode),
     });
 
-    //Create a JWT token for verification purposes
-    const token = jwt.sign(
-      { email: user.email, id: user._id },
-      process.env.JSON_WEB_TOKEN_SECRET_KEY
-    );
-
-    return response.status(200).json({
+    // 6. Respond to the client
+    return response.status(201).json({
       success: true,
       error: false,
-      message: "User registered successfully! Please verify your email.",
-      token: token, // Optional: include this if needed for verification
+      message: "User registered successfully! Please check your email for the OTP.",
     });
+
   } catch (error) {
+    // This will catch any errors, including validation errors.
     return response.status(500).json({
-      message: error.message || error,
+      message: error.message || "An internal server error occurred during registration.",
       error: true,
       success: false,
     });
   }
 }
-//verifyEmail controller
+
+// UPDATED verifyEmail controller
 export async function verifyEmailController(request, response) {
   try {
     const { email, otp } = request.body;
 
-    const user = await UserModel.findOne({ email: email });
-    if (!user) {
+    if (!email || !otp) {
       return response.status(400).json({
-        message: "User not found",
+        message: "Email and OTP are required.",
         error: true,
         success: false,
       });
     }
-    const isCodeValid = user.otp === otp;
-    const isNotExpired = user.otpExpires > Date.now();
 
-    if (isCodeValid && isNotExpired) {
-      user.verify_email = true;
-      //   user.otp = null;
-      //   user.otpExpires = null;
-      await user.save();
-      return response.status(200).json({
-        success: true,
-        error: false,
-        message: "Email verified successfully ,Please LogIn ",
+    const user = await UserModel.findOne({ email: email });
+
+    if (!user) {
+      return response.status(404).json({
+        message: "User not found. Please register first.",
+        error: true,
+        success: false,
       });
-    } else if (!isCodeValid) {
+    }
+
+    if (user.verify_email) {
       return response.status(400).json({
-        success: true,
+        message: "This email is already verified.",
+        error: true,
+        success: false,
+      });
+    }
+
+    // Check if OTP is expired
+    if (new Date() > user.otpExpires) {
+      return response.status(400).json({
+        message: "OTP has expired. Please request a new one.",
+        error: true,
+        success: false,
+      });
+    }
+
+    // Check if OTP is correct
+    if (user.otp !== otp) {
+      return response.status(400).json({
+        message: "The OTP you entered is incorrect.",
+        error: true,
+        success: false,
+      });
+    }
+
+    // If OTP is correct and not expired, update the user
+    user.verify_email = true;
+    user.otp = null;
+    user.otpExpires = null;
+    
+    // This save will now work without errors
+    await user.save(); 
+
+    return response.status(200).json({
+      success: true,
+      error: false,
+      message: "Email verified successfully! You can now log in.",
+    });
+
+  } catch (error) {
+    return response.status(500).json({
+      message: error.message || "An internal server error occurred during verification.",
+      error: true,
+      success: false,
+    });
+  }
+}
+
+
+export async function authWithGoogle(request, response) {
+  const { name, email, password, avatar, mobile, role } = request.body;
+  try {
+    const existingUser = await UserModel.findOne({ email: email });
+    if (!existingUser) {
+      const user = await UserModel.create({
+        name: name,
+        mobile: mobile,
+        email: email,
+        password: "null",
+        avatar: avatar,
+        role: role,
+        verify_email: true,
+        signUpWithGoogle: true,
+      });
+      await user.save();
+        const accessToken = await generatedAccessToken(user._id);
+      const refreshToken = await generatedRefreshToken(user._id);
+
+      await UserModel.findByIdAndUpdate(user?._id, {
+        last_login_date: new Date(),
+      });
+
+      const cookiesOption = {
+        httpOnly: true,
+        secure: true,
+        sameSite: "None",
+      };
+      response.cookie("accessToken", accessToken, cookiesOption);
+      response.cookie("refreshToken", refreshToken, cookiesOption);
+
+      return response.json({
+        message: "Login successfully",
         error: false,
-        message: "Invalid OTP",
+        success: true,
+        data: {
+          accessToken,
+          refreshToken,
+        },
       });
     } else {
-      return response.status(400).json({
-        success: true,
+      const accessToken = await generatedAccessToken(existingUser._id);
+      const refreshToken = await generatedRefreshToken(existingUser._id);
+
+      await UserModel.findByIdAndUpdate(existingUser?._id, {
+        last_login_date: new Date(),
+      });
+
+      const cookiesOption = {
+        httpOnly: true,
+        secure: true,
+        sameSite: "None",
+      };
+      response.cookie("accessToken", accessToken, cookiesOption);
+      response.cookie("refreshToken", refreshToken, cookiesOption);
+
+      return response.json({
+        message: "Login successfully",
         error: false,
-        message: "OTP expired",
+        success: true,
+        data: {
+          accessToken,
+          refreshToken,
+        },
       });
     }
   } catch (error) {
@@ -199,7 +308,6 @@ export async function loginUserController(request, response) {
   }
 }
 
-
 // Logout controller
 export async function logoutController(request, response) {
   try {
@@ -227,7 +335,6 @@ export async function logoutController(request, response) {
     });
   }
 }
-
 
 // image upload
 var imagesArr = [];
@@ -377,11 +484,11 @@ export async function updateUserDetails(request, response) {
       error: false,
       success: true,
       user: {
-        name:updateUser?.name,
-        _id:updateUser?._id,
-        email:updateUser?.email,
-        mobile:updateUser?.mobile,
-        avatar:updateUser?.avatar
+        name: updateUser?.name,
+        _id: updateUser?._id,
+        email: updateUser?.email,
+        mobile: updateUser?.mobile,
+        avatar: updateUser?.avatar,
       },
     });
   } catch (error) {
@@ -496,16 +603,11 @@ export async function verifyForgotPasswordOtp(request, response) {
 //reset password
 export async function resetPassword(request, response) {
   try {
-    const { email,oldPassword, newPassword, confirmPassword } = request.body;
-    if (!email || !newPassword || !confirmPassword) {
-      return response.status(400).json({
-        error:true,
-        success:false,
-        message: "provide required fields email, newPassword, confirmPassword",
-      });
-    }
-    
+    const { email, oldPassword, newPassword, confirmPassword } = request.body;
+
+    // CHANGED: Different validation for Google vs normal users
     const user = await UserModel.findOne({ email });
+
     if (!user) {
       return response.status(400).json({
         message: "Email not available",
@@ -513,27 +615,64 @@ export async function resetPassword(request, response) {
         success: false,
       });
     }
-   const checkPassword = await bcryptjs.compare(oldPassword, user.password);
-    if (!checkPassword) {
-      return response.status(400).json({
-        message: "Your Old password is wrong",
-        error: true,
-        success: false,
-      });
+
+    // CHANGED: Check if Google user - they DON'T need old password
+    if (user?.signUpWithGoogle !== true) {
+      // Normal user - MUST provide old password
+      if (!oldPassword) {
+        return response.status(400).json({
+          error: true,
+          success: false,
+          message: "Old password is required",
+        });
+      }
+
+      if (!newPassword || !confirmPassword) {
+        return response.status(400).json({
+          error: true,
+          success: false,
+          message: "provide newPassword and confirmPassword",
+        });
+      }
+
+      const checkPassword = await bcryptjs.compare(oldPassword, user.password);
+      if (!checkPassword) {
+        return response.status(400).json({
+          message: "Your Old password is wrong",
+          error: true,
+          success: false,
+        });
+      }
+    } else {
+      // CHANGED: Google user - only need new password and confirm
+      if (!newPassword || !confirmPassword) {
+        return response.status(400).json({
+          error: true,
+          success: false,
+          message: "provide newPassword and confirmPassword",
+        });
+      }
     }
 
+    // Check if passwords match
     if (newPassword !== confirmPassword) {
       return response.status(400).json({
-        message: "NewPassword and confirmPassword must be same ",
+        message: "NewPassword and confirmPassword must be same",
         error: true,
         success: false,
       });
     }
 
+    // Hash and save new password
     const salt = await bcryptjs.genSalt(10);
     const hashPassword = await bcryptjs.hash(confirmPassword, salt);
-
     user.password = hashPassword;
+    
+    // CHANGED: If Google user is setting password for first time, mark as no longer Google-only
+    if (user.signUpWithGoogle === true) {
+      user.signUpWithGoogle = false; // Now they can login with email/password too
+    }
+    
     await user.save();
 
     return response.json({
@@ -549,6 +688,7 @@ export async function resetPassword(request, response) {
     });
   }
 }
+
 
 //refresh token controller
 export async function refreshTokenji(request, response) {
@@ -608,11 +748,11 @@ export async function userDetails(request, response) {
   try {
     const userId = request.userId;
 
-    const user = await UserModel.findById(userId).select(
-      "-password -refresh_token"
-    ).populate('address_details');
-    //here i don't need password and refresh_token so i minus of both 
-// here i use populate for address details, shopping cart and order history attaching to user
+    const user = await UserModel.findById(userId)
+      .select("-password -refresh_token")
+      .populate("address_details");
+    //here i don't need password and refresh_token so i minus of both
+    // here i use populate for address details, shopping cart and order history attaching to user
     return response.json({
       message: "user details",
       data: user,
@@ -628,13 +768,13 @@ export async function userDetails(request, response) {
   }
 }
 
-//All New Route 
-// ✅ GET ALL USERS - New API for admin
+//All New Route
+//  GET ALL USERS - New API for admin
 export async function getAllUsers(request, response) {
   try {
     const users = await UserModel.find({})
       .select("-password -refresh_token -otp -otpExpires")
-      .populate('address_details')
+      .populate("address_details")
       .sort({ createdAt: -1 });
 
     return response.status(200).json({
@@ -652,16 +792,16 @@ export async function getAllUsers(request, response) {
   }
 }
 
-// ✅ GET SINGLE USER BY ID - New API
+// GET SINGLE USER BY ID - New API
 export async function getSingleUser(request, response) {
   try {
     const { id } = request.params;
-    
+
     const user = await UserModel.findById(id)
       .select("-password -refresh_token -otp -otpExpires")
-      .populate('address_details')
-      .populate('shopping_cart')
-      .populate('orderHistory');
+      .populate("address_details")
+      .populate("shopping_cart")
+      .populate("orderHistory");
 
     if (!user) {
       return response.status(404).json({
@@ -686,11 +826,11 @@ export async function getSingleUser(request, response) {
   }
 }
 
-// ✅ DELETE SINGLE USER - New API
+//  DELETE SINGLE USER - New API
 export async function deleteUser(request, response) {
   try {
     const { id } = request.params;
-    
+
     const user = await UserModel.findById(id);
     if (!user) {
       return response.status(404).json({
@@ -706,7 +846,7 @@ export async function deleteUser(request, response) {
       const urlArr = imgUrl.split("/");
       const image = urlArr[urlArr.length - 1];
       const imageName = image.split(".")[0];
-      
+
       if (imageName) {
         await cloudinary.uploader.destroy(imageName);
       }
@@ -728,7 +868,7 @@ export async function deleteUser(request, response) {
   }
 }
 
-// ✅ DELETE MULTIPLE USERS - New API
+//  DELETE MULTIPLE USERS - New API
 export async function deleteMultipleUsers(request, response) {
   try {
     const { ids } = request.body;
@@ -743,7 +883,7 @@ export async function deleteMultipleUsers(request, response) {
 
     // Get users to delete their avatars from cloudinary
     const users = await UserModel.find({ _id: { $in: ids } });
-    
+
     // Delete avatars from cloudinary
     for (const user of users) {
       if (user.avatar) {
@@ -751,7 +891,7 @@ export async function deleteMultipleUsers(request, response) {
         const urlArr = imgUrl.split("/");
         const image = urlArr[urlArr.length - 1];
         const imageName = image.split(".")[0];
-        
+
         if (imageName) {
           await cloudinary.uploader.destroy(imageName);
         }
@@ -776,7 +916,7 @@ export async function deleteMultipleUsers(request, response) {
   }
 }
 
-// ✅ UPDATE USER STATUS - New API for admin
+//  UPDATE USER STATUS - New API for admin
 export async function updateUserStatus(request, response) {
   try {
     const { id } = request.params;
@@ -819,3 +959,24 @@ export async function updateUserStatus(request, response) {
   }
 }
 
+//Review controller
+export async function addReview(request, response) {
+   try {
+    const {userName,review,image,rating,userId} = request.body;
+
+    const userReview = new ReviewModel({
+      image:image,
+      userName:userName,
+      review:review,
+      rating:rating,
+      userId:userId
+
+    })
+   }catch (error) {
+    return response.status(500).json({
+      message: error.message || "Something went wrong",
+      error: true,
+      success: false,
+    });
+  }
+}

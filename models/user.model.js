@@ -51,12 +51,6 @@ const userSchema = mongoose.Schema({
         ref : 'address'
     }
     ],
-       shopping_cart: [
-       {
-        type: mongoose.Schema.ObjectId,
-        ref : 'cartProduct'
-    }
-    ],
      orderHistory: [
        {
         type: mongoose.Schema.ObjectId,
@@ -74,7 +68,11 @@ const userSchema = mongoose.Schema({
         type : String,
         enum : ['ADMIN',"USER"],
         DEFAULT : "USER"
-     }
+     },
+    signUpWithGoogle: {
+      type: Boolean,
+      default: false, 
+    },
 },{timestamps : true}
 )
 

@@ -1804,14 +1804,14 @@ export async function filterProducts(request, response) {
 const sortItems = (products, sortBy, order) => {
   return products.sort((a,b)=>{
     if (sortBy === 'name') {
-      return order === 'asc' ? a.name.localCompare(b.name) : 
-      b.name.localCompare(a.name)
+      return order === 'asc' ? a.name.localeCompare(b.name) : 
+      b.name.localeCompare(a.name)
     }
 
     if (sortBy === "price") {
       return order === 'asc' ? a.price - b.price : b.price - a.price
     }
-    return;
+    return 0;
   })
 }
 
@@ -1823,8 +1823,7 @@ export async function sortBy(request,response) {
     error:false,
     success:true,
     products:sortedItems,
+     totalPages:0,
     page:0,
-    totalPages:0
   })
-  
 }
