@@ -10,8 +10,8 @@ export async function addAddressController(request, response) {
       pincode,
       country,
       mobile,
-      status,
-      selected,
+      landmark,
+      addressType,
     } = request.body;
     const userId = request.userId;
 
@@ -22,7 +22,8 @@ export async function addAddressController(request, response) {
       !pincode ||
       !country ||
       !mobile ||
-      status === undefined
+      !landmark ||
+      !addressType    
     ) {
       return response.status(400).json({
         message: "All fields are required",
@@ -38,9 +39,9 @@ export async function addAddressController(request, response) {
       pincode,
       country,
       mobile,
-      status,
+      landmark,
+      addressType,
       userId,
-      selected,
     });
 
     const savedAddress = await address.save();
@@ -50,7 +51,7 @@ export async function addAddressController(request, response) {
       { _id: userId },
       {
         $push: {
-          address_details: savedAddress._id,
+          address_details: savedAddress,
         },
       }
     );
@@ -140,6 +141,85 @@ export async function deleteAddressController(request, response) {
       message: error.message,
       success: false,
       error: true,
+    });
+  }
+}
+
+export async function getSingleAddressController(request, response) {
+  try {
+    const  Id  = request.params.id
+    const  address = await AddressModel.findOne({ _id: Id });
+    if (!address) {
+      return response.status(404).json({
+        message: "Address not found",
+        success: false,
+        error: true,
+      });
+    }
+    return response.status(200).json({
+      message: "Address fetched successfully",
+      address: address,
+      success: true,
+      error: false,
+    });
+  }catch (error) {
+    return response.status(500).json({
+      message: error.message,
+      success: false,
+      error: true,
+    });
+  }
+}
+
+export async function EditAddress(request, response) {
+  try {
+    const Addressid = request.params.id;
+    if (!Addressid) {
+      return response.status(400).json({
+        message: "Address ID is required",
+        error: true,
+        success: false,
+      })
+    }
+
+    const {
+      address_line1,
+      city,
+      state,
+      pincode,
+      country,
+      mobile,
+      landmark,
+      addressType,
+    } = request.body;
+    
+
+    const address = await AddressModel.findByIdAndUpdate(
+      Addressid,
+      {
+        address_line1: address_line1,
+        city: city,
+        state: state,
+        pincode: pincode,
+        country: country,
+        mobile: mobile,
+        landmark: landmark,
+        addressType: addressType, 
+      },
+      { new: true }
+    );
+
+    return response.status(200).json({
+      message: "Address Updated successfully",
+      error: false,
+      success: true,
+      address: address,
+    });
+  }catch (error) {
+    return response.status(500).json({
+      message: error.message || "Error uploading avatar",
+      error: true,
+      success: false,
     });
   }
 }

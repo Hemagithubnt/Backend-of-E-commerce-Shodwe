@@ -89,23 +89,30 @@ export async function getCartItemController(request, response) {
 export async function updateCartItemQtyController(request, response) {
   try {
     const userId = request.userId;
-    const { _id, qty,subTotal } = request.body;
+    const { _id, qty, subTotal, size, weight, ram } = request.body;
 
-    if (!_id || !qty) {
+    if (!_id) {
       return response.status(400).json({
-        message: "provide _id , qty",
+        message: "provide _id",
       });
     }
+
+    // Build update object dynamically
+    const updateFields = {};
+    
+    if (qty !== undefined) updateFields.quantity = qty;
+    if (subTotal !== undefined) updateFields.subTotal = subTotal;
+    if (size !== undefined) updateFields.size = size;
+    if (weight !== undefined) updateFields.weight = weight;
+    if (ram !== undefined) updateFields.ram = ram;
 
     const updateCartitem = await CartProductModel.updateOne(
       {
         _id: _id,
         userId: userId,
       },
-      {
-        quantity: qty,
-        subTotal: subTotal,
-      },{ new: true }
+      updateFields,
+      { new: true }
     );
 
     return response.json({
@@ -115,7 +122,7 @@ export async function updateCartItemQtyController(request, response) {
       data: updateCartitem,
     });
   } catch (error) {
-    console.error("Error in createProduct:", error);
+    console.error("Error in updateCartItemQtyController:", error);
     return response.status(500).json({
       message: error.message,
       success: false,
@@ -123,6 +130,7 @@ export async function updateCartItemQtyController(request, response) {
     });
   }
 }
+
 
 export async function deleteCartItemQtyController(request, response) {
   try {
