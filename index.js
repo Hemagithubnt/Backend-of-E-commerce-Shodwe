@@ -16,6 +16,7 @@ import HomeSlideRouter from "./route/homeSlider.route.js";
 import bannerV1Router from "./route/bannerV1.route.js";
 import blogRouter from "./route/blog.route.js";
 import reviewRouter from "./route/review.route.js";
+import orderRouter from "./route/order.route.js";
 const app = express();
 
 // CORS first
@@ -64,6 +65,7 @@ app.use('/api/homeSlides', HomeSlideRouter);
 app.use("/api/bannerV1", bannerV1Router);
 app.use("/api/blog", blogRouter);
 app.use("/api/review", reviewRouter);
+app.use('/api/order', orderRouter);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

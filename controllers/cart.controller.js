@@ -1,3 +1,4 @@
+
 import CartProductModel from "../models/cart.model.js";
 
 
@@ -158,12 +159,32 @@ export async function deleteCartItemQtyController(request, response) {
       });
     }
 
-    return response.json({
+    return response.status(200).json({
       message: "Item remove",
       success: true,
       error: false,
       data: deleteCartItem,
     });
+  } catch (error) {
+    return response.status(500).json({
+      message: error.message,
+      success: false,
+      error: true,
+    });
+  }
+}
+
+export async function emptyCartController(request, response){
+  try {
+    const userId = request.params.id  // middleware
+
+    await CartProductModel.deleteMany({userId : userId})
+
+   return response.status(200).json({
+      success: true,
+      error: false,
+    });
+    
   } catch (error) {
     return response.status(500).json({
       message: error.message,
