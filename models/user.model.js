@@ -64,11 +64,11 @@ const userSchema = mongoose.Schema({
         type : Date,
        
     },
-    role : {
-        type : String,
-        enum : ['ADMIN',"USER"],
-        DEFAULT : "USER"
-     },
+  role: {
+      type: String,
+      enum: ["ADMIN", "USER"],
+      default: "USER",
+    },
     signUpWithGoogle: {
       type: Boolean,
       default: false, 

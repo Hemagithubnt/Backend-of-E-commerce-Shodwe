@@ -13,19 +13,19 @@ cloudinary.config({
   secure: true,
 });
 
-// COMBINED API - Upload images + Create/Update Product
+// Upload images + Create/Update Product
 export async function createProduct(request, response) {
   try {
-    // CHANGED: read files as a map so we can access both "images" and "bannerImages" without breaking old behavior
-    const filesByField = request.files || {}; // CHANGED
+    //  read files as a map so we can access both "images" and "bannerImages" without breaking old behavior
+    const filesByField = request.files || {}; 
     const imageFiles = Array.isArray(filesByField)
       ? filesByField
-      : filesByField.images || []; // CHANGED: backward compatibility with upload.array("images")
-    const bannerFiles = filesByField.bannerImages || []; // NEW: banner images array
+      : filesByField.images || []; 
+    const bannerFiles = filesByField.bannerImages || []; 
 
     const imagesArr = [];
 
-    // Step 1: Upload images to Cloudinary (if any)
+    // Upload images to Cloudinary (if any)
     if (imageFiles.length > 0) {
       for (let i = 0; i < imageFiles.length; i++) {
         const result = await cloudinary.uploader.upload(imageFiles[i].path, {
@@ -40,22 +40,22 @@ export async function createProduct(request, response) {
       }
     }
 
-    // NEW: Upload banner images (if any)
-    const bannerUrls = []; // NEW
+    //  Upload banner images (if any)
+    const bannerUrls = []; 
     if (bannerFiles.length > 0) {
-      // NEW
+     
       for (let i = 0; i < bannerFiles.length; i++) {
-        // NEW
+        
         const result = await cloudinary.uploader.upload(bannerFiles[i].path, {
-          // NEW
-          use_filename: true, // NEW
-          unique_filename: false, // NEW
-          overwrite: false, // NEW
-        }); // NEW
-        bannerUrls.push(result.secure_url); // NEW
-        fs.unlinkSync(bannerFiles[i].path); // NEW
-      } // NEW
-    } // NEW
+          
+          use_filename: true, 
+          unique_filename: false, 
+          overwrite: false, 
+        }); 
+        bannerUrls.push(result.secure_url); 
+        fs.unlinkSync(bannerFiles[i].path); 
+      } 
+    } 
 
     let product;
 
@@ -71,12 +71,14 @@ export async function createProduct(request, response) {
           error: true,
         });
       }
+
+      
     } else {
       // Create new product
       product = new ProductModel();
     }
 
-    // Step 3: Parse array fields SAFELY (FIX FOR NESTED ARRAYS)
+    // Step 3: Parse array fields SAFELY 
     let productRam = [];
     let size = [];
     let productWeight = [];
@@ -94,7 +96,7 @@ export async function createProduct(request, response) {
         }
       }
 
-      // Parse size
+      //  size
       if (request.body.size) {
         if (Array.isArray(request.body.size)) {
           size = request.body.size;
@@ -104,7 +106,7 @@ export async function createProduct(request, response) {
         }
       }
 
-      // Parse productWeight
+      //  productWeight
       if (request.body.productWeight) {
         if (Array.isArray(request.body.productWeight)) {
           productWeight = request.body.productWeight;
@@ -115,7 +117,6 @@ export async function createProduct(request, response) {
       }
     } catch (parseError) {
       console.log(" Array parse error:", parseError);
-      // Keep empty arrays if parsing fails
     }
 
     //  Step 4: Update product fields
@@ -127,6 +128,7 @@ export async function createProduct(request, response) {
     product.oldPrice = request.body.oldPrice || product.oldPrice;
     product.catName = request.body.catName || product.catName;
     product.category = request.body.category || product.category;
+    product.userId = request.body.userId || product.userId;
     product.subCatId = request.body.subCatId || product.subCatId;
     product.CatId = request.body.CatId || product.CatId;
     product.subCat = request.body.subCat || product.subCat;
@@ -145,7 +147,7 @@ export async function createProduct(request, response) {
       product.bannerimages = [...(product.bannerimages || []), ...bannerUrls];
     }
 
-    // CRITICAL FIX: Assign parsed arrays (not raw request.body values)
+  
     product.productRam =
       productRam.length > 0 ? productRam : product.productRam || [];
     product.size = size.length > 0 ? size : product.size || [];
@@ -295,7 +297,7 @@ export async function getAllProductsByCatName(request, response) {
     const products = await ProductModel.find({
       catName: request.query.catName,
     })
-     .populate({ path: "category", strictPopulate: false })
+      .populate({ path: "category", strictPopulate: false })
       .skip((page - 1) * perPage)
       .limit(perPage)
       .exec();
@@ -345,7 +347,7 @@ export async function getAllProductsBySubCatId(request, response) {
     const products = await ProductModel.find({
       subCatId: request.params.id,
     })
-     .populate({ path: "category", strictPopulate: false })
+      .populate({ path: "category", strictPopulate: false })
       .skip((page - 1) * perPage)
       .limit(perPage)
       .exec();
@@ -395,7 +397,7 @@ export async function getAllProductsBySubCatName(request, response) {
     const products = await ProductModel.find({
       subCat: request.query.subCat,
     })
-     .populate({ path: "category", strictPopulate: false })
+      .populate({ path: "category", strictPopulate: false })
       .skip((page - 1) * perPage)
       .limit(perPage)
       .exec();
@@ -495,7 +497,7 @@ export async function getAllProductsByThirdLevelSubCatName(request, response) {
     const products = await ProductModel.find({
       thirdsubCat: request.query.thirdsubCat,
     })
-     .populate({ path: "category", strictPopulate: false })
+      .populate({ path: "category", strictPopulate: false })
       .skip((page - 1) * perPage)
       .limit(perPage)
       .exec();
@@ -578,7 +580,7 @@ export async function getAllProductsByPrice(request, response) {
     error: false,
     success: true,
     products: filteredProducts,
-    totalPages: 0, 
+    totalPages: 0,
     page: 0,
   });
 }
@@ -633,7 +635,7 @@ export async function getAllProductsByRating(request, response) {
 
     //  Get products with the same filter
     const products = await ProductModel.find(filter)
-     .populate({ path: "category", strictPopulate: false })
+      .populate({ path: "category", strictPopulate: false })
       .skip((page - 1) * perPage)
       .limit(perPage)
       .sort({ rating: -1, createdAt: -1 }) // Sort by highest rating first
@@ -713,7 +715,7 @@ export async function getProductsByRatingRange(request, response) {
     }
 
     const products = await ProductModel.find(filter)
-     .populate({ path: "category", strictPopulate: false })
+      .populate({ path: "category", strictPopulate: false })
       .skip((page - 1) * perPage)
       .limit(perPage)
       .sort({ rating: -1, createdAt: -1 })
@@ -813,7 +815,10 @@ export async function getAllFeaturedProducts(request, response) {
 
 //delete single Product
 export async function deleteProduct(request, response) {
-  const product = await ProductModel.findById(request.params.id).populate({ path: "category", strictPopulate: false })
+  const product = await ProductModel.findById(request.params.id).populate({
+    path: "category",
+    strictPopulate: false,
+  });
   if (!product) {
     return response.status(404).json({
       message: "No products found",
@@ -910,7 +915,10 @@ export async function deleteMultipleProduct(req, res) {
 //get single product
 export async function getSingleProduct(request, response) {
   try {
-    const product = await ProductModel.findById(request.params.id).populate({ path: "category", strictPopulate: false });
+    const product = await ProductModel.findById(request.params.id).populate({
+      path: "category",
+      strictPopulate: false,
+    });
 
     if (!product) {
       return response.status(404).json({
@@ -1738,7 +1746,7 @@ export async function getProductSizeById(request, response) {
   }
 }
 
-//filter product 
+//filter product
 export async function filterProducts(request, response) {
   try {
     const {
@@ -1776,7 +1784,7 @@ export async function filterProducts(request, response) {
     }
 
     const products = await ProductModel.find(filters)
-     .populate({ path: "category", strictPopulate: false })
+      .populate({ path: "category", strictPopulate: false })
       .skip((page - 1) * limit)
       .limit(parseInt(limit));
 
@@ -1800,30 +1808,72 @@ export async function filterProducts(request, response) {
   }
 }
 
-//sortItems 
+//sortItems
 const sortItems = (products, sortBy, order) => {
-  return products.sort((a,b)=>{
-    if (sortBy === 'name') {
-      return order === 'asc' ? a.name.localeCompare(b.name) : 
-      b.name.localeCompare(a.name)
+  return products.sort((a, b) => {
+    if (sortBy === "name") {
+      return order === "asc"
+        ? a.name.localeCompare(b.name)
+        : b.name.localeCompare(a.name);
     }
 
     if (sortBy === "price") {
-      return order === 'asc' ? a.price - b.price : b.price - a.price
+      return order === "asc" ? a.price - b.price : b.price - a.price;
     }
     return 0;
-  })
-}
+  });
+};
 
-export async function sortBy(request,response) {
-  const {products, sortBy, order} = request.body;
+export async function sortBy(request, response) {
+  const { products, sortBy, order } = request.body;
   const sortedItems = sortItems([...products?.products], sortBy, order);
 
   return response.status(200).json({
-    error:false,
-    success:true,
-    products:sortedItems,
-     totalPages:0,
-    page:0,
-  })
+    error: false,
+    success: true,
+    products: sortedItems,
+    totalPages: 0,
+    page: 0,
+  });
+}
+
+// here is api for search for all products
+export async function searchProductController(request, response) {
+  try {
+    const { query,page, limit } = request.body;
+    if (!query) {
+      return response.status(400).json({
+        message: "Query is Required",
+        success: false,
+        error: true,
+      });
+    }
+
+    const products = await ProductModel.find({
+      $or: [
+        { name: { $regex: query, $options: "i" } },
+        { brand: { $regex: query, $options: "i" } },
+        { catName: { $regex: query, $options: "i" } },
+        { subCat: { $regex: query, $options: "i" } },
+        { thirdsubCat: { $regex: query, $options: "i" } },
+      ],
+    }).populate("category")
+
+    const total = await products?.length;
+
+    return response.status(200).json({
+      success: true,
+      error: false,
+      products: products,
+      total: 1,
+      page: parseInt(page),
+      totalPages: 1
+    });
+  } catch (error) {
+    return response.status(500).json({
+      message: error.message,
+      success: false,
+      error: true,
+    });
+  }
 }

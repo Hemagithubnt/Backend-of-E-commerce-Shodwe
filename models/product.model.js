@@ -120,6 +120,10 @@ const productSchema = mongoose.Schema(
       type: String,
       trim: true,
     },
+  userId: {
+       type: mongoose.Schema.ObjectId,
+       ref: "User",
+     },
     isDisplayOnHomeBanner: {
       type: Boolean,
       default: false,

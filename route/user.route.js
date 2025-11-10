@@ -10,6 +10,7 @@ verifyForgotPasswordOtp,
   authWithGoogle} from "../controllers/user.controller.js";
 import auth from "../middlewares/auth.js";
 import upload from "../middlewares/multer.js";
+import { adminAuth } from "../middlewares/adminAuth.js";
 
 const userRouter = Router();
 
@@ -27,13 +28,12 @@ userRouter.post('/reset-password', resetPassword);
 userRouter.post('/refresh-Token', refreshTokenji);
 userRouter.get('/user-details',auth, userDetails);
 
-//  NEW ADMIN ROUTES FOR USER MANAGEMENT
-userRouter.get("/", auth, getAllUsers); // Get all users
-userRouter.get("/:id", auth, getSingleUser); // Get single user
-userRouter.delete("/:id", auth, deleteUser); // Delete single user
-userRouter.post("/deleteMultiple", auth, deleteMultipleUsers); // Delete multiple users
-userRouter.put("/status/:id", auth, updateUserStatus); // Update user status
-
+// ADMIN-ONLY ROUTES (Protected with adminAuth middleware)
+userRouter.get("/", auth, adminAuth, getAllUsers); // Get all users
+userRouter.get("/:id", auth, adminAuth, getSingleUser); // Get single user
+userRouter.delete("/:id", auth, adminAuth, deleteUser); // Delete single user
+userRouter.post("/deleteMultiple", auth, adminAuth, deleteMultipleUsers); // Delete multiple users
+userRouter.put("/status/:id", auth, adminAuth, updateUserStatus); // Update user status
 
 
 

@@ -1,6 +1,5 @@
 import ReviewModel from "../models/review.model.js";
 import { v2 as cloudinary } from "cloudinary";
-import fs from "fs";
 
 // Cloudinary config (if not already in main file)
 cloudinary.config({
@@ -42,7 +41,7 @@ export async function AddReview(request, response) {
   }
 }
 
-// Get All Reviews
+// Get All Reviews for any perticular product 
 export async function getAllReviews(request, response) {
   try {
     const productId = request.query.productId;
@@ -67,6 +66,25 @@ export async function getAllReviews(request, response) {
   } catch (error) {
     return response.status(500).json({
       message: error.message || error,
+      error: true,
+      success: false,
+    });
+  }
+}
+
+//Get Total reviews overall in database
+export async function getTotalReviews(request, response) {
+  try {
+    const reviewsTotal = await ReviewModel.find()
+    return response.status(200).json({
+      message: "reviews fetched successfully",
+      data: reviewsTotal,
+      error: false,
+      success: true,
+    });
+  } catch (error) {
+    return response.status(500).json({
+      message: error.message || "Something went wrong",
       error: true,
       success: false,
     });

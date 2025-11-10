@@ -34,6 +34,7 @@ import {
   getProductWeightById,
   getSingleProduct,
   removeImageFromCloudinary,
+  searchProductController,
   sortBy,
   updateProduct,
   updateProductRAMS,
@@ -82,7 +83,7 @@ productRouter.put(
   auth,
   // CHANGED: accept both images[] and bannerImages[]
   upload.fields([
-    { name: "images", maxCount: 20 },         // existing product images
+    { name: "images", maxCount: 20 },        
     { name: "bannerImages", maxCount: 20 },   // NEW: banner images
   ]),
   updateProduct
@@ -116,5 +117,8 @@ productRouter.get("/ProductSize/:id", getProductSizeById);
 productRouter.post("/filterProducts", filterProducts);
 //sortBy 
 productRouter.post("/sortBy", sortBy);
+
+//filter search product by any category,any product name and etc 
+productRouter.post("/search/get", searchProductController);
 
 export default productRouter;

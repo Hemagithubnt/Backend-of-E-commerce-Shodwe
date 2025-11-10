@@ -689,7 +689,6 @@ export async function resetPassword(request, response) {
   }
 }
 
-
 //refresh token controller
 export async function refreshTokenji(request, response) {
   try {
@@ -768,29 +767,35 @@ export async function userDetails(request, response) {
   }
 }
 
-//All New Route
-//  GET ALL USERS - New API for admin
+//  GET ALL USERS 
 export async function getAllUsers(request, response) {
   try {
-    const users = await UserModel.find({})
-      .select("-password -refresh_token -otp -otpExpires")
-      .populate("address_details")
-      .sort({ createdAt: -1 });
+    if (request.user?.role !== "ADMIN") {
+      return response.status(403).json({
+        error: true,
+        success: false,
+        message: "Only admins can view all users",
+      });
+    }
 
-    return response.status(200).json({
-      message: "Users fetched successfully",
-      data: users,
+    const users = await UserModel.find();
+
+    return response.json({
       error: false,
       success: true,
+      message: "All users",
+      data: users,
     });
   } catch (error) {
+    console.error("Error in getAllUsers:", error);
     return response.status(500).json({
-      message: error.message || "Something went wrong",
-      error: true,
+      message: error.message || "Error fetching users",
       success: false,
+      error: true,
     });
   }
 }
+
 
 // GET SINGLE USER BY ID - New API
 export async function getSingleUser(request, response) {
@@ -980,3 +985,4 @@ export async function addReview(request, response) {
     });
   }
 }
+
