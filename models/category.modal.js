@@ -12,6 +12,11 @@ const categorySchema = mongoose.Schema({
       type: String,
     },
   ],
+    userId: {
+        type: mongoose.Schema.ObjectId,
+        ref: "User",
+        required: true,
+      },
   parentCatName: {
     type: String,
   },

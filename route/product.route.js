@@ -47,10 +47,9 @@ const productRouter = Router();
 productRouter.post(
   "/createProduct",
   auth,
-  // CHANGED: accept both images[] and bannerImages[]
   upload.fields([
-    { name: "images", maxCount: 20 },         // existing product images
-    { name: "bannerImages", maxCount: 20 },   // NEW: banner images
+    { name: "images", maxCount: 20 },         
+    { name: "bannerImages", maxCount: 20 },  
   ]),
   createProduct
 );
@@ -81,10 +80,9 @@ productRouter.delete("/deleteImage", auth, removeImageFromCloudinary);
 productRouter.put(
   "/updateProduct/:id",
   auth,
-  // CHANGED: accept both images[] and bannerImages[]
   upload.fields([
     { name: "images", maxCount: 20 },        
-    { name: "bannerImages", maxCount: 20 },   // NEW: banner images
+    { name: "bannerImages", maxCount: 20 },  
   ]),
   updateProduct
 );

@@ -17,3 +17,4 @@ categoryRouter.get("/subcategories", getSubCategoriesWithParent);
 
 
 export default categoryRouter;
+

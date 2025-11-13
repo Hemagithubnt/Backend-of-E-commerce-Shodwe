@@ -67,7 +67,6 @@ const productSchema = mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Category",
     },
-
     countInStock: {
       type: Number,
       required: [true, "Stock count is required"],
@@ -89,9 +88,9 @@ const productSchema = mongoose.Schema(
       min: [0, "Discount cannot be negative"],
       max: [100, "Discount cannot exceed 100%"],
     },
-    sale:{
+    sale: {
       type: Number,
-      default: 0
+      default: 0,
     },
     productRam: [
       {
@@ -111,19 +110,19 @@ const productSchema = mongoose.Schema(
         trim: true,
       },
     ],
-   bannerimages: 
-   {
-     type: [String],
-     default: [] 
-   },
-     bannerTitleName: {
+    bannerimages: {
+      type: [String],
+      default: [],
+    },
+    bannerTitleName: {
       type: String,
       trim: true,
     },
-  userId: {
-       type: mongoose.Schema.ObjectId,
-       ref: "User",
-     },
+    userId: {
+      type: mongoose.Schema.ObjectId,
+      ref: "User",
+      required: true,
+    },
     isDisplayOnHomeBanner: {
       type: Boolean,
       default: false,

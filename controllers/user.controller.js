@@ -603,9 +603,35 @@ export async function verifyForgotPasswordOtp(request, response) {
 //reset password
 export async function resetPassword(request, response) {
   try {
-    const { email, oldPassword, newPassword, confirmPassword } = request.body;
+    const { email, newPassword, confirmPassword } = request.body;
 
-    // CHANGED: Different validation for Google vs normal users
+    // Validate inputs
+    if (!email) {
+      return response.status(400).json({
+        message: "Email not available",
+        error: true,
+        success: false,
+      });
+    }
+
+    if (!newPassword || !confirmPassword) {
+      return response.status(400).json({
+        error: true,
+        success: false,
+        message: "Please provide new password and confirm password",
+      });
+    }
+
+    // Check if passwords match
+    if (newPassword !== confirmPassword) {
+      return response.status(400).json({
+        message: "New password and confirm password must be the same",
+        error: true,
+        success: false,
+      });
+    }
+
+    // Find user by email
     const user = await UserModel.findOne({ email });
 
     if (!user) {
@@ -616,67 +642,19 @@ export async function resetPassword(request, response) {
       });
     }
 
-    // CHANGED: Check if Google user - they DON'T need old password
-    if (user?.signUpWithGoogle !== true) {
-      // Normal user - MUST provide old password
-      if (!oldPassword) {
-        return response.status(400).json({
-          error: true,
-          success: false,
-          message: "Old password is required",
-        });
-      }
-
-      if (!newPassword || !confirmPassword) {
-        return response.status(400).json({
-          error: true,
-          success: false,
-          message: "provide newPassword and confirmPassword",
-        });
-      }
-
-      const checkPassword = await bcryptjs.compare(oldPassword, user.password);
-      if (!checkPassword) {
-        return response.status(400).json({
-          message: "Your Old password is wrong",
-          error: true,
-          success: false,
-        });
-      }
-    } else {
-      // CHANGED: Google user - only need new password and confirm
-      if (!newPassword || !confirmPassword) {
-        return response.status(400).json({
-          error: true,
-          success: false,
-          message: "provide newPassword and confirmPassword",
-        });
-      }
-    }
-
-    // Check if passwords match
-    if (newPassword !== confirmPassword) {
-      return response.status(400).json({
-        message: "NewPassword and confirmPassword must be same",
-        error: true,
-        success: false,
-      });
-    }
-
-    // Hash and save new password
+    // Hash the new password
     const salt = await bcryptjs.genSalt(10);
-    const hashPassword = await bcryptjs.hash(confirmPassword, salt);
+    const hashPassword = await bcryptjs.hash(newPassword, salt);
+
+    // Update user password
     user.password = hashPassword;
-    
-    // CHANGED: If Google user is setting password for first time, mark as no longer Google-only
-    if (user.signUpWithGoogle === true) {
-      user.signUpWithGoogle = false; // Now they can login with email/password too
-    }
-    
+    user.otp = null;
+    user.otpExpires = null;
+
     await user.save();
 
     return response.json({
-      message: "Password update successfully.",
+      message: "Password updated successfully.",
       error: false,
       success: true,
     });
@@ -688,6 +666,7 @@ export async function resetPassword(request, response) {
     });
   }
 }
+
 
 //refresh token controller
 export async function refreshTokenji(request, response) {

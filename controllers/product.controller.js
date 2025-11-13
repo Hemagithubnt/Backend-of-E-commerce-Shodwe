@@ -862,52 +862,63 @@ export async function deleteProduct(request, response) {
 }
 
 //delete multiple Product
+//delete multiple Product - FIXED
 export async function deleteMultipleProduct(req, res) {
   try {
-    const idsParam = req.query.ids;
-    if (!idsParam) {
-      return res
-        .status(400)
-        .json({ success: false, error: true, message: "No IDs provided" });
+        const { ids } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: true,
+        message: "No IDs provided"
+      });
     }
-    const ids = idsParam.split(",").map((id) => id.trim());
-    if (!ids.length) {
-      return res
-        .status(400)
-        .json({ success: false, error: true, message: "Invalid IDs" });
-    }
-    // Delete from Cloudinary, then from DB
+
+    // Delete images from Cloudinary for each product
     await Promise.all(
       ids.map(async (id) => {
-        const prod = await ProductModel.findById(id);
-        if (prod?.images) {
-          await Promise.all(
-            prod.images.map((url) => {
-              const name = url.split("/").pop().split(".")[0];
-              return cloudinary.uploader.destroy(name);
-            })
-          );
+        try {
+          const prod = await ProductModel.findById(id);
+          if (prod?.images && Array.isArray(prod.images)) {
+            await Promise.all(
+              prod.images.map((url) => {
+                const name = url.split("/").pop().split(".")[0];
+                return cloudinary.uploader.destroy(name).catch(() => null);
+              })
+            );
+          }
+        } catch (err) {
+          console.log(`Error deleting images for product ${id}:`, err.message);
         }
       })
     );
+
+    // Delete products from database
     const { deletedCount } = await ProductModel.deleteMany({
-      _id: { $in: ids },
+      _id: { $in: ids }
     });
-    if (!deletedCount) {
-      return res
-        .status(404)
-        .json({ success: false, error: true, message: "No products deleted" });
+
+    if (deletedCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: true,
+        message: "No products deleted"
+      });
     }
+
     return res.status(200).json({
       success: true,
       error: false,
-      message: `${deletedCount} deleted`,
+      message: `${deletedCount} product(s) deleted successfully`
     });
+
   } catch (err) {
+    console.error("Error in deleteMultipleProduct:", err);
     return res.status(500).json({
       success: false,
       error: true,
-      message: err.message || "Server error",
+      message: err.message || "Server error"
     });
   }
 }
@@ -1213,6 +1224,7 @@ export async function createProductRAMS(request, response) {
   try {
     let productRAMS = new productRAMSModel({
       name: request.body.name,
+       userId: request.user._id,
     });
     productRAMS = await productRAMS.save();
 
@@ -1393,6 +1405,7 @@ export async function createProductWeight(request, response) {
   try {
     let productWeight = new ProductWeightModel({
       name: request.body.name,
+       userId: request.user._id,
     });
     productWeight = await productWeight.save();
 
@@ -1573,6 +1586,7 @@ export async function createProductSize(request, response) {
   try {
     let productSize = new ProductSizeModel({
       name: request.body.name,
+      userId: request.user._id,
     });
     productSize = await productSize.save();
 
@@ -1745,6 +1759,10 @@ export async function getProductSizeById(request, response) {
     });
   }
 }
+
+// --------------------------------------------------------------------------------------------------------
+// some extra function filterration functions controller 
+// ---------------------------------------------------------------------------------------------------------
 
 //filter product
 export async function filterProducts(request, response) {

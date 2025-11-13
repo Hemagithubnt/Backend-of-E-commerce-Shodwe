@@ -38,6 +38,7 @@ export async function createCategory(request, response) {
       name: request.body.name,
       images: imagesArr,
       parentId: request.body.parentId || null,
+      userId: request.user._id,
       parentCatName: request.body.parentCatName || null,
     });
 
@@ -343,7 +344,7 @@ export async function getSubCategoriesWithParent(request, response) {
         name: subCat.name, // Subcategory name
         parentCatName: subCat.parentCatName, // Parent category name
         parentId: subCat.parentId,
-        images: parentCategory ? parentCategory.images : [], // ✅ Parent category images!
+        images: parentCategory ? parentCategory.images : [], 
         createdAt: subCat.createdAt,
         updatedAt: subCat.updatedAt,
         parentCategory: parentCategory // Full parent data

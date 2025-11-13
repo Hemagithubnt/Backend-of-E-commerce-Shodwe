@@ -12,6 +12,11 @@ const blogSchema = mongoose.Schema(
       required: [true, "Blog description is required"],
       trim: true,
     },
+      userId: {
+            type: mongoose.Schema.ObjectId,
+            ref: "User",
+            required: true,
+          },
     images: [
       {
         type: String,

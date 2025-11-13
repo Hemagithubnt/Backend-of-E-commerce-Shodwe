@@ -6,10 +6,13 @@ const productSizeSchema = mongoose.Schema(
       type: String,
       required: true,
     },
-    dateCreated: {
-      type: Date,
-      default: Date.now,
+ 
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
     },
+    
   },
   {
     timestamps: true,

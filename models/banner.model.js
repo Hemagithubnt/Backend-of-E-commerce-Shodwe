@@ -48,6 +48,11 @@ const bannerV1Schema = mongoose.Schema(
       default: 0,
       min: [0, "Price cannot be negative"],
     },
+      userId: {
+            type: mongoose.Schema.ObjectId,
+            ref: "User",
+            required: true,
+          },
      alignInfo: {
       type: String,
       default: '',

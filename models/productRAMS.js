@@ -6,6 +6,13 @@ const productRAMSSchema = mongoose.Schema(
       type: String,
       required: true,
     },
+
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+   
     dateCreated: {
       type: Date,
       default: Date.now,

@@ -61,6 +61,7 @@ export async function createBlog(request, response) {
       title: request.body.title,
       description: request.body.description,
       images: imagesArr,
+       userId: request.user._id,
     });
 
     const savedBlog = await blog.save();

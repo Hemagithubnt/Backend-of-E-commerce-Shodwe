@@ -68,6 +68,7 @@ export async function createBanner(request, response) {
       thirdsubCatId: request.body.thirdsubCatId || "",
       price: request.body.price || 0,
       alignInfo: request.body.alignInfo || '',
+       userId: request.user._id,
     });
 
     const savedBanner = await banner.save();
