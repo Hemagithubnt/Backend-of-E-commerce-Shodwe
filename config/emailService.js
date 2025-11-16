@@ -1,11 +1,10 @@
 import axios from 'axios';
 
-// Function to send email using Resend
 async function sendEmail(to, subject, text, html) {
   try {
     const response = await axios.post('https://api.resend.com/emails', {
-      from: 'E-commerce Shodwe <noreply@resend.dev>', // Resend default sender - works out of box
-      to: to,
+      from: 'E-commerce Shodwe <noreply@resend.dev>',
+      to: process.env.EMAIL, // Use YOUR email (hmt364134@gmail.com) for testing
       subject: subject,
       html: html,
     }, {
@@ -15,18 +14,11 @@ async function sendEmail(to, subject, text, html) {
       }
     });
 
-    console.log('✅ Email sent successfully:', response.data.id);
-    
-    return {
-      success: true,
-      messageId: response.data.id
-    };
+    console.log('✅ Email sent to:', process.env.EMAIL);
+    return { success: true, messageId: response.data.id };
   } catch (error) {
     console.error('❌ Error sending email:', error.response?.data || error.message);
-    return {
-      success: false,
-      error: error.message
-    };
+    return { success: false, error: error.message };
   }
 }
 
