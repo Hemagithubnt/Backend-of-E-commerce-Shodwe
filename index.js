@@ -20,7 +20,17 @@ import orderRouter from "./route/order.route.js";
 const app = express();
 
 // CORS first
-app.use(cors());
+app.use(cors({
+  origin: [
+    'https://ecommerceshowdwe.netlify.app',  // Your Netlify production URL
+    'http://localhost:5173',                   // Keep localhost for dev
+    'http://localhost:3000'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 
 // Body parsing middleware MUST come early
 app.use(express.json({ limit: '10mb' }));
