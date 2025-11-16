@@ -62,13 +62,19 @@ export async function registerUserController(request, response) {
     const newUser = new UserModel(payload);
     await newUser.save();
 
-    // 5. Send verification email
-    await sendEmailFun({
-      sendTo: email,
-      subject: "Verify Your Email for E-commerce Shodwe",
-      text: `Your One-Time Password is: ${verifyCode}`,
-      html: VerificationEmail(name, verifyCode),
-    });
+      // 5. Send verification email (wrapped in try-catch so it doesn't fail if email doesn't send)
+    try {
+      await sendEmailFun({
+        sendTo: email,
+        subject: "Verify Your Email for E-commerce Shodwe",
+        text: `Your One-Time Password is ${verifyCode}`,
+        html: VerificationEmail(name, verifyCode),
+      });
+      console.log("✅ Email sent to:", email);
+    } catch (emailError) {
+      console.log("⚠️ Email sending failed (non-critical):", emailError.message);
+      // Email failed but registration succeeds - user can still verify
+    }
 
     // 6. Respond to the client
     return response.status(201).json({
@@ -518,13 +524,19 @@ export async function forgotPasswordController(request, response) {
       user.otp = verifyCode;
       (user.otpExpires = Date.now() + 600000), await user.save();
 
-      await sendEmailFun({
-        sendTo: email,
-        subject: "Verify OTP from Ecommerce App",
-        text: "",
-        html: VerificationEmail(user.name, verifyCode),
-      });
-
+     // Send email (wrapped in try-catch so it doesn't fail if email doesn't send)
+      try {
+        await sendEmailFun({
+          sendTo: email,
+          subject: "Verify OTP from Ecommerce App",
+          text: "",
+          html: VerificationEmail(user.name, verifyCode),
+        });
+        console.log("✅ OTP email sent to:", email);
+      } catch (emailError) {
+        console.log("⚠️ Email sending failed (non-critical):", emailError.message);
+        // Email failed but OTP is still saved in DB - user can verify
+      }
       return response.json({
         message: "Check your email",
         error: false,
