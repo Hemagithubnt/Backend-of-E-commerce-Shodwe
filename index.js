@@ -22,12 +22,13 @@ const app = express();
 // CORS first
 app.use(cors({
   origin: [
-    'https://ecommerceshowdwe.netlify.app',  // Your Netlify production URL
-    'http://localhost:5173',                   // Keep localhost for dev
+    'https://ecommerceshowdwe.netlify.app',  
+    'http://localhost:5173',                   
     'http://localhost:3000',
     'http://localhost:5174',
     'https://69166c10815147e7aff4f31f--ecommerceshowdwe.netlify.app/',
-    'https://soft-pudding-f21b61.netlify.app'
+    'https://soft-pudding-f21b61.netlify.app',
+    'https://loquacious-figolla-91830e.netlify.app/'
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
