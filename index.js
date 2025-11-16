@@ -26,7 +26,8 @@ app.use(cors({
     'http://localhost:5173',                   // Keep localhost for dev
     'http://localhost:3000',
     'http://localhost:5174',
-    'https://69166c10815147e7aff4f31f--ecommerceshowdwe.netlify.app/'
+    'https://69166c10815147e7aff4f31f--ecommerceshowdwe.netlify.app/',
+    'https://soft-pudding-f21b61.netlify.app'
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
