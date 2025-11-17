@@ -28,6 +28,7 @@ app.use(cors({
     'http://localhost:5174',
     'https://69166c10815147e7aff4f31f--ecommerceshowdwe.netlify.app',
     'https://soft-pudding-f21b61.netlify.app',
+    'https://loquacious-figolla-91830e.netlify.app',
     'https://loquacious-figolla-91830e.netlify.app'
   ],
   credentials: true,
